@@ -11,7 +11,7 @@ from app.core.constants import (
     COL_ALIPAY_NAME_CANDIDATES, COL_LOGISTICS_NO_CANDIDATES,
     COL_SCREENSHOT_CANDIDATES, COL_ID_CANDIDATES, COL_ORDER_NO_CANDIDATES,
     MAX_REFUND_AMOUNT, REGEX_PHONE, REGEX_EMAIL, REGEX_CN_NAME,
-    REGEX_LOGISTICS, REGEX_MONEY_CLEAN, REGEX_NON_ALNUM,
+    REGEX_LOGISTICS, REGEX_MONEY_CLEAN,
     COL_ABNORMAL_REASON
 )
 from app.utils.excel_utils import (
@@ -77,12 +77,19 @@ def parse_money(value: Any) -> Optional[float]:
 
 @lru_cache(maxsize=16384)
 def _normalize_logistics_text(value: str) -> str:
-    return REGEX_NON_ALNUM.sub("", value).strip()
+    return value
 
 def normalize_logistics_no(raw: Any) -> str:
     if raw is None or (isinstance(raw, float) and math.isnan(raw)):
         return ""
-    return _normalize_logistics_text(str(raw).strip())
+    if isinstance(raw, float):
+        if raw.is_integer():
+            return format(raw, ".0f")
+        out = format(raw, "f").rstrip("0").rstrip(".")
+        return out if out else "0"
+    if isinstance(raw, int):
+        return str(raw)
+    return _normalize_logistics_text(str(raw))
 
 def validate_row(amount: Any, alipay_account: Any, alipay_name: Any, logistics_no: Any) -> Tuple[bool, str]:
     reasons = []
@@ -102,7 +109,7 @@ def validate_row(amount: Any, alipay_account: Any, alipay_name: Any, logistics_n
 
     lno = normalize_logistics_no(logistics_no)
     if lno == "" or not REGEX_LOGISTICS.match(lno):
-        reasons.append("单号异常（物流单号需10~16位字母数字且包含数字）")
+        reasons.append("单号异常（物流单号需10~16位字母数字，且不能包含中文、特殊标点或空格）")
 
     if reasons:
         return False, "；".join(reasons)

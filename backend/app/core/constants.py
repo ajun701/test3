@@ -35,7 +35,7 @@ MAX_REFUND_AMOUNT = 12.0
 REGEX_PHONE = re.compile(r"^1[3-9]\d{9}$")
 REGEX_EMAIL = re.compile(r"^[A-Za-z0-9_.+-]+@[A-Za-z0-9-]+\.[A-Za-z0-9-.]+$")
 REGEX_CN_NAME = re.compile(r"^[\u4e00-\u9fa5]{2,5}$")
-REGEX_LOGISTICS = re.compile(r"^(?=.*\d)[A-Za-z0-9]{10,16}$")
+REGEX_LOGISTICS = re.compile(r"^[A-Za-z0-9]{10,16}$")
 REGEX_MONEY_CLEAN = re.compile(r"[^0-9.\-]")
 REGEX_NON_ALNUM = re.compile(r"[^A-Za-z0-9]")
 REGEX_URL_IN_PARENS = re.compile(r"\((https?://[^\s)]+)\)")
