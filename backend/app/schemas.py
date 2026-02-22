@@ -65,6 +65,7 @@ class AITaskStatusResponse(BaseModel):
     pending: int
     ok_rows: Optional[int] = 0
     bad_rows: Optional[int] = 0
+    min_interval_sec: Optional[float] = Field(default=None, description="AI 请求最小间隔秒数")
     
     error_message: Optional[str] = None
     artifacts: List[str] = Field(default_factory=list, description="结果文件下载路径")
