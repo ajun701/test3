@@ -8,7 +8,7 @@
     <el-tabs v-model="tab" type="border-card">
       <el-tab-pane label="1. 娓呮礂" name="clean">
         <el-upload action="#" :auto-upload="false" :on-change="onCleanFile" :limit="1" drag>
-          <div class="el-upload__text">涓婁紶閫€杩愯垂鐧昏琛?/div>
+          <div class="el-upload__text">上传退运费登记表</div>
         </el-upload>
         <div class="bar">
           <el-input-number v-model="cleanPreviewRows" :min="20" :max="1000" :step="20" />
@@ -22,8 +22,8 @@
             <el-col :span="8"><el-statistic title="寮傚父" :value="cleanRes.abnormal_rows" /></el-col>
           </el-row>
           <div class="bar">
-            <el-button type="success" @click="download(cleanRes.normal_file_url)">涓嬭浇姝ｅ父琛?/el-button>
-            <el-button type="warning" @click="download(cleanRes.abnormal_file_url)">涓嬭浇寮傚父琛?/el-button>
+            <el-button type="success" @click="download(cleanRes.normal_file_url)">下载正常表</el-button>
+            <el-button type="warning" @click="download(cleanRes.abnormal_file_url)">下载异常表</el-button>
           </div>
           <div class="grid">
             <TableView title="姝ｅ父棰勮" :preview="cleanRes.normal_preview" v-model:displayRows="cleanNormalShow" />
@@ -34,10 +34,10 @@
 
       <el-tab-pane label="2. 鍏ュ簱鍖归厤" name="match">
         <el-form label-width="170px">
-          <el-form-item label="浣跨敤姝ラ涓€姝ｅ父琛?>
+          <el-form-item label="使用步骤一正常表">
             <el-switch v-model="matchUseStep1" :disabled="!cleanRes?.normal_file_url" />
           </el-form-item>
-          <el-form-item v-if="!matchUseStep1" label="姝ラ涓€姝ｅ父琛?>
+          <el-form-item v-if="!matchUseStep1" label="步骤一正常表">
             <el-upload action="#" :auto-upload="false" :on-change="onMatchSourceFile" :limit="1">
               <el-button>閫夋嫨鏂囦欢</el-button>
             </el-upload>
@@ -54,28 +54,28 @@
         </div>
         <div class="grid">
           <TableView title="婧愯〃棰勮" :preview="matchSourcePreview" v-model:displayRows="matchSourceShow" />
-          <TableView title="鍏ュ簱琛ㄩ瑙? :preview="matchInboundPreview" v-model:displayRows="matchInboundShow" />
+          <TableView title="入库表预览" :preview="matchInboundPreview" v-model:displayRows="matchInboundShow" />
         </div>
         <div v-if="matchRes" class="panel">
           <el-row :gutter="12">
             <el-col :span="8"><el-statistic title="鎬昏" :value="matchRes.total_rows" /></el-col>
-            <el-col :span="8"><el-statistic title="宸插叆搴? :value="matchRes.inbound_rows" /></el-col>
-            <el-col :span="8"><el-statistic title="鏈叆搴? :value="matchRes.pending_rows" /></el-col>
+            <el-col :span="8"><el-statistic title="已入库" :value="matchRes.inbound_rows" /></el-col>
+            <el-col :span="8"><el-statistic title="未入库" :value="matchRes.pending_rows" /></el-col>
           </el-row>
           <div class="bar">
-            <el-button type="success" @click="download(matchRes.inbound_file_url)">涓嬭浇宸插叆搴?/el-button>
-            <el-button type="warning" @click="download(matchRes.pending_file_url)">涓嬭浇鏈叆搴?/el-button>
+            <el-button type="success" @click="download(matchRes.inbound_file_url)">下载已入库</el-button>
+            <el-button type="warning" @click="download(matchRes.pending_file_url)">下载未入库</el-button>
           </div>
           <div class="grid">
-            <TableView title="宸插叆搴撻瑙? :preview="matchRes.inbound_preview" v-model:displayRows="matchInboundResShow" />
-            <TableView title="鏈叆搴撻瑙? :preview="matchRes.pending_preview" v-model:displayRows="matchPendingResShow" />
+            <TableView title="已入库预览" :preview="matchRes.inbound_preview" v-model:displayRows="matchInboundResShow" />
+            <TableView title="未入库预览" :preview="matchRes.pending_preview" v-model:displayRows="matchPendingResShow" />
           </div>
         </div>
       </el-tab-pane>
 
       <el-tab-pane label="3. AI澶嶆牳" name="ai">
         <el-form label-width="190px">
-          <el-form-item label="浣跨敤姝ラ浜屽凡鍏ュ簱琛?>
+          <el-form-item label="使用步骤二已入库表">
             <el-switch v-model="aiUseStep2" :disabled="!matchRes?.inbound_file_url" />
           </el-form-item>
           <el-form-item v-if="!aiUseStep2" label="涓婁紶寰呭鏍歌〃">
@@ -101,13 +101,13 @@
           <el-button type="warning" @click="pauseAi" :disabled="aiStatus!=='running'">鏆傚仠</el-button>
           <el-button type="success" @click="resumeAi" :disabled="!['paused','error','pending'].includes(aiStatus)">缁х画</el-button>
           <el-button @click="refreshAi" :disabled="!taskId">鍒锋柊</el-button>
-          <el-button :loading="snapshotLoading" @click="downloadTaskSnapshot" :disabled="!taskId">鐢熸垚宸插鐞?鏈鐞嗗揩鐓?/el-button>
+          <el-button :loading="snapshotLoading" @click="downloadTaskSnapshot" :disabled="!taskId">生成已处理/未处理快照</el-button>
         </div>
-        <TableView title="寰呭鏍搁瑙? :preview="aiSourcePreview" v-model:displayRows="aiSourceShow" />
+        <TableView title="待复核预览" :preview="aiSourcePreview" v-model:displayRows="aiSourceShow" />
         <div v-if="aiTask" class="panel">
           <el-row :gutter="12">
             <el-col :span="6"><el-statistic title="璁″垝" :value="aiTask.total" /></el-col>
-            <el-col :span="6"><el-statistic title="宸插鐞? :value="aiTask.processed" /></el-col>
+            <el-col :span="6"><el-statistic title="已处理" :value="aiTask.processed" /></el-col>
             <el-col :span="6"><el-statistic title="姝ｅ父" :value="aiTask.ok_rows" /></el-col>
             <el-col :span="6"><el-statistic title="寮傚父" :value="aiTask.bad_rows" /></el-col>
           </el-row>
@@ -125,9 +125,9 @@
             <el-button v-for="(u,i) in aiTask.artifacts" :key="`${u}${i}`" @click="download('/'+u)">{{ artifactLabel(u, i) }}</el-button>
           </div>
           <div class="bar" v-if="snapshotRes">
-            <el-button type="primary" plain @click="download(snapshotRes.processed_file_url)">涓嬭浇宸插鐞嗛儴鍒?/el-button>
-            <el-button type="warning" plain @click="download(snapshotRes.unprocessed_file_url)">涓嬭浇鏈鐞嗛儴鍒?/el-button>
-            <el-button v-if="snapshotRes.ok_file_url" type="success" plain @click="download(snapshotRes.ok_file_url)">涓嬭浇鍙墦娆?/el-button>
+            <el-button type="primary" plain @click="download(snapshotRes.processed_file_url)">下载已处理部分</el-button>
+            <el-button type="warning" plain @click="download(snapshotRes.unprocessed_file_url)">下载未处理部分</el-button>
+            <el-button v-if="snapshotRes.ok_file_url" type="success" plain @click="download(snapshotRes.ok_file_url)">下载可打款</el-button>
             <el-button v-if="snapshotRes.bad_file_url" type="danger" plain @click="download(snapshotRes.bad_file_url)">涓嬭浇闇€鍥炶</el-button>
           </div>
         </div>
@@ -135,8 +135,8 @@
           <div class="bar">
             <el-select v-model="aiRowsScope" @change="onAiRowsQueryChange">
               <el-option label="鍏ㄩ儴" value="all" />
-              <el-option label="宸插鐞? value="processed" />
-              <el-option label="鏈鐞? value="pending" />
+              <el-option label="已处理" value="processed" />
+              <el-option label="未处理" value="pending" />
             </el-select>
             <el-select v-model="aiRowsSize" @change="onAiRowsQueryChange">
               <el-option :value="20" label="20" /><el-option :value="50" label="50" /><el-option :value="100" label="100" />
@@ -154,8 +154,8 @@
           <el-date-picker
             v-model="historyTimeRange"
             type="datetimerange"
-            range-separator="鑷?
-            start-placeholder="寮€濮嬫椂闂?
+            range-separator="至"
+            start-placeholder="开始时间"
             end-placeholder="缁撴潫鏃堕棿"
             value-format="YYYY-MM-DD HH:mm:ss"
           />
@@ -198,10 +198,10 @@ const abs = (u) => (!u ? '' : (String(u).startsWith('http') ? u : `${BASE_URL}/$
 const download = (u) => { const x = abs(u); if (!x) return ElMessage.warning('涓嬭浇閾炬帴鏃犳晥'); window.open(x, '_blank', 'noopener') }
 const artifactLabel = (u, i) => {
   const v = decodeURIComponent(String(u || '')).toLowerCase()
-  if (v.includes('ai澶嶆牳姝ｅ父') || v.includes('ai鍙墦娆?)) return '涓嬭浇鍙墦娆?
-  if (v.includes('ai澶嶆牳寮傚父') || v.includes('ai闇€鍥炶')) return '涓嬭浇闇€鍥炶'
-  if (v.includes('ai鏈鐞?)) return '涓嬭浇鏈鐞?
-  return `涓嬭浇浜х墿${i + 1}`
+  if (v.includes('ai复核正常') || v.includes('ai可打款')) return '下载可打款'
+  if (v.includes('ai复核异常') || v.includes('ai需回访')) return '下载需回访'
+  if (v.includes('ai未处理')) return '下载未处理'
+  return `下载产物${i + 1}`
 }
 const normPreview = (d) => ({ total_rows: Number(d?.total_rows||0), columns: Array.isArray(d?.columns)?d.columns:[], rows: Array.isArray(d?.rows)?d.rows:[] })
 const uploadPreview = async (f, n=1000) => { const fd = new FormData(); fd.append('file', f); fd.append('sample_rows', String(n)); return normPreview((await http.post(`${API_BASE}/preview-table`, fd)).data) }
@@ -243,9 +243,29 @@ const onMatchInboundFile = async (f) => {
   matchInboundFile.value = f?.raw || null
   matchInboundPreview.value = null
   if (!matchInboundFile.value) return
-  try { matchInboundPreview.value = await uploadPreview(matchInboundFile.value) } catch (e) { ElMessage.error(errMsg(e, '鍏ュ簱琛ㄩ瑙堝け璐?)) }
+  try { matchInboundPreview.value = await uploadPreview(matchInboundFile.value) } catch (e) { ElMessage.error(errMsg(e, '入库表预览失败')) }
 }
-const runMatch = async () => { const fd = new FormData(); fd.append('preview_rows', String(matchPreviewRows.value)); if (matchUseStep1.value) { if (!cleanRes.value?.normal_file_url) return ElMessage.warning('璇峰厛瀹屾垚姝ラ涓€'); fd.append('source_file_url', cleanRes.value.normal_file_url) } else if (matchSourceFile.value) { fd.append('source_file', matchSourceFile.value) } else return ElMessage.warning('璇蜂笂浼犳簮琛?); if (!matchInboundFile.value) return ElMessage.warning('璇蜂笂浼犲叆搴撹〃'); fd.append('inbound_file', matchInboundFile.value); matchLoading.value = true; try { matchRes.value = (await http.post(`${API_BASE}/match`, fd)).data; ElMessage.success('姝ラ浜屽畬鎴?) } catch (e) { ElMessage.error(errMsg(e, '鍖归厤澶辫触')) } finally { matchLoading.value = false } }
+const runMatch = async () => {
+  const fd = new FormData()
+  fd.append('preview_rows', String(matchPreviewRows.value))
+  if (matchUseStep1.value) {
+    if (!cleanRes.value?.normal_file_url) return ElMessage.warning('请先完成步骤一')
+    fd.append('source_file_url', cleanRes.value.normal_file_url)
+  } else if (matchSourceFile.value) {
+    fd.append('source_file', matchSourceFile.value)
+  } else return ElMessage.warning('请上传源表')
+  if (!matchInboundFile.value) return ElMessage.warning('请上传入库表')
+  fd.append('inbound_file', matchInboundFile.value)
+  matchLoading.value = true
+  try {
+    matchRes.value = (await http.post(`${API_BASE}/match`, fd)).data
+    ElMessage.success('步骤二完成')
+  } catch (e) {
+    ElMessage.error(errMsg(e, '匹配失败'))
+  } finally {
+    matchLoading.value = false
+  }
+}
 
 const aiUseStep2 = ref(true), aiFile = ref(null), aiSourcePreview = ref(null), aiSourceShow = ref(50), aiApiKey = ref(''), aiModel = ref('qwen3-vl-flash'), aiMaxImages = ref(4), aiMaxRows = ref(300), aiRateSeconds = ref(2.0), aiRateRows = ref(1), aiStarting = ref(false), taskId = ref(''), aiTask = ref(null), aiStatus = ref(''), aiRowsScope = ref('all'), aiRowsSize = ref(50), aiRowsLoading = ref(false)
 const aiMinIntervalSec = computed(() => {
@@ -282,8 +302,8 @@ const saveAiSpeedSettings = () => {
 loadAiSpeedSettings()
 watch([aiRateSeconds, aiRateRows], saveAiSpeedSettings)
 const syncAiSource = async () => { if (aiUseStep2.value) { aiSourcePreview.value = matchRes.value?.inbound_file_url ? await artifactPreview(matchRes.value.inbound_file_url) : null } else { aiSourcePreview.value = aiFile.value ? await uploadPreview(aiFile.value) : null } }
-watch(aiUseStep2, async () => { try { await syncAiSource() } catch (e) { ElMessage.error(errMsg(e, '鍔犺浇姝ラ涓夐瑙堝け璐?)) } })
-watch(() => matchRes.value?.inbound_file_url, async () => { if (aiUseStep2.value) { try { await syncAiSource() } catch (e) { ElMessage.error(errMsg(e, '鍔犺浇姝ラ浜岀粨鏋滃け璐?)) } } })
+watch(aiUseStep2, async () => { try { await syncAiSource() } catch (e) { ElMessage.error(errMsg(e, '加载步骤三预览失败')) } })
+watch(() => matchRes.value?.inbound_file_url, async () => { if (aiUseStep2.value) { try { await syncAiSource() } catch (e) { ElMessage.error(errMsg(e, '加载步骤二结果失败')) } } })
 const onAiFile = async (f) => {
   aiFile.value = f?.raw || null
   if (!aiUseStep2.value) { try { await syncAiSource() } catch (e) { ElMessage.error(errMsg(e, '鏂囦欢棰勮澶辫触')) } }
@@ -308,11 +328,11 @@ const startPoll = () => { stopPoll(); errCount = 0; timer = setInterval(async ()
 const startAi = async () => {
   const fd = new FormData()
   if (aiUseStep2.value) {
-    if (!matchRes.value?.inbound_file_url) return ElMessage.warning('璇峰厛瀹屾垚姝ラ浜?)
+    if (!matchRes.value?.inbound_file_url) return ElMessage.warning('请先完成步骤二')
     fd.append('file_url', matchRes.value.inbound_file_url)
   } else if (aiFile.value) {
     fd.append('file', aiFile.value)
-  } else return ElMessage.warning('璇蜂笂浼犲緟澶嶆牳琛?)
+  } else return ElMessage.warning('请上传待复核表')
   fd.append('api_key', aiApiKey.value || '')
   fd.append('model_name', aiModel.value)
   fd.append('max_images', String(aiMaxImages.value))
@@ -329,23 +349,23 @@ const startAi = async () => {
     await fetchAiStatus()
     await fetchAiRows()
     startPoll()
-    ElMessage.success('AI浠诲姟宸插惎鍔?)
+    ElMessage.success('AI任务已启动')
   } catch (e) {
     ElMessage.error(errMsg(e, '浠诲姟鍚姩澶辫触'))
   } finally {
     aiStarting.value = false
   }
 }
-const pauseAi = async () => { if (!taskId.value) return; try { await http.post(`${API_BASE}/ai-task/${taskId.value}/pause`); stopPoll(); await fetchAiStatus(); ElMessage.info('浠诲姟宸叉殏鍋?) } catch (e) { ElMessage.error(errMsg(e, '鏆傚仠澶辫触')) } }
-const resumeAi = async () => { if (!taskId.value) return; try { const fd = new FormData(); fd.append('api_key', aiApiKey.value || ''); fd.append('min_interval_sec', String(aiMinIntervalSec.value)); await http.post(`${API_BASE}/ai-task/${taskId.value}/resume`, fd); await fetchAiStatus(); startPoll(); ElMessage.success('浠诲姟宸叉仮澶?) } catch (e) { ElMessage.error(errMsg(e, '鎭㈠澶辫触')) } }
-const refreshAi = async () => { try { await fetchAiStatus(); await fetchAiRows(); ElMessage.success('宸插埛鏂?) } catch (e) { ElMessage.error(errMsg(e, '鍒锋柊澶辫触')) } }
+const pauseAi = async () => { if (!taskId.value) return; try { await http.post(`${API_BASE}/ai-task/${taskId.value}/pause`); stopPoll(); await fetchAiStatus(); ElMessage.info('任务已暂停') } catch (e) { ElMessage.error(errMsg(e, '暂停失败')) } }
+const resumeAi = async () => { if (!taskId.value) return; try { const fd = new FormData(); fd.append('api_key', aiApiKey.value || ''); fd.append('min_interval_sec', String(aiMinIntervalSec.value)); await http.post(`${API_BASE}/ai-task/${taskId.value}/resume`, fd); await fetchAiStatus(); startPoll(); ElMessage.success('任务已恢复') } catch (e) { ElMessage.error(errMsg(e, '恢复失败')) } }
+const refreshAi = async () => { try { await fetchAiStatus(); await fetchAiRows(); ElMessage.success('已刷新') } catch (e) { ElMessage.error(errMsg(e, '刷新失败')) } }
 const downloadTaskSnapshot = async () => {
   if (!taskId.value) return
   snapshotLoading.value = true
   try {
     const r = (await http.post(`${API_BASE}/ai-task/${taskId.value}/snapshot`)).data
     snapshotRes.value = r
-    ElMessage.success('宸茬敓鎴愬揩鐓э紝鍙笅杞藉凡澶勭悊/鏈鐞?)
+    ElMessage.success('已生成快照，可下载已处理/未处理')
   } catch (e) {
     ElMessage.error(errMsg(e, '蹇収鐢熸垚澶辫触'))
   } finally {
@@ -393,7 +413,7 @@ const downloadHistoryCsv = async () => {
     link.click()
     document.body.removeChild(link)
     window.URL.revokeObjectURL(url)
-    ElMessage.success('鍘嗗彶璁板綍宸蹭笅杞?)
+    ElMessage.success('历史记录已下载')
   } catch (e) {
     ElMessage.error(errMsg(e, '鍘嗗彶璁板綍涓嬭浇澶辫触'))
   } finally {
