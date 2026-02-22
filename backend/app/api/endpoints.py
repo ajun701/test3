@@ -89,7 +89,7 @@ def _df_to_preview(df: pd.DataFrame, sample_rows: int) -> TablePreview:
 def _resolve_artifact_path(file_url: str) -> Path:
     raw = str(file_url or "").strip().split("?", 1)[0]
     if not raw:
-        raise HTTPException(status_code=400, detail="鏂囦欢鍦板潃涓嶈兘涓虹┖")
+        raise HTTPException(status_code=400, detail="文件地址不能为空")
 
     if raw.startswith("/artifacts/"):
         rel_path = raw[len("/artifacts/") :]
@@ -101,7 +101,7 @@ def _resolve_artifact_path(file_url: str) -> Path:
     candidate = (settings.ARTIFACT_DIR / rel_path).resolve()
     root = settings.ARTIFACT_DIR.resolve()
     if not _is_sub_path(candidate, root):
-        raise HTTPException(status_code=400, detail="闈炴硶鏂囦欢璺緞")
+        raise HTTPException(status_code=400, detail="非法文件路径")
     if not candidate.exists() or not candidate.is_file():
         raise HTTPException(status_code=404, detail="artifact file not found")
     return candidate
@@ -186,7 +186,7 @@ async def _resolve_upload_or_artifact(
 
 
 def save_artifact(file_bytes: bytes, prefix: str, suffix: str = ".xlsx") -> str:
-    """淇濆瓨鐢熸垚鐨?Excel 鏂囦欢骞惰繑鍥炰緵鍓嶇涓嬭浇鐨勭浉瀵?URL 璺緞"""
+    """保存生成的 Excel 文件，并返回供前端下载的相对 URL 路径"""
     safe_prefix = str(prefix).replace("/", "_").replace("\\", "_").strip("_")
     filename = f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{safe_prefix}_{uuid.uuid4().hex[:6]}{suffix}"
     filepath = settings.ARTIFACT_DIR / filename
@@ -195,12 +195,13 @@ def save_artifact(file_bytes: bytes, prefix: str, suffix: str = ".xlsx") -> str:
 
 
 def enqueue_ai_task(task_id: str, api_key: str = "") -> None:
-    # 寤惰繜瀵煎叆锛岄伩鍏嶉潪 AI 鎺ュ彛鍙楀埌鍙€変緷璧栧垵濮嬪寲鐨勫奖鍝嶃€?    from app.tasks.ai_tasks import run_ai_task
+    # 延迟导入，避免非 AI 接口受到可选依赖初始化影响
+    from app.tasks.ai_tasks import run_ai_task
 
     run_ai_task.delay(task_id, api_key or "")
 
 
-@router.post("/preview-table", response_model=TablePreviewResponse, summary="涓婁紶琛ㄦ牸棰勮")
+@router.post("/preview-table", response_model=TablePreviewResponse, summary="上传表格预览")
 async def preview_table(
     file: UploadFile = File(...),
     sample_rows: int = Form(200, ge=1, le=2000),
@@ -209,23 +210,23 @@ async def preview_table(
     file_bytes = await file.read()
     df = read_table(file_bytes, filename)
     if df.empty:
-        raise HTTPException(status_code=400, detail="涓婁紶琛ㄦ牸涓虹┖")
+        raise HTTPException(status_code=400, detail="上传表格为空")
     return TablePreviewResponse(**_df_to_preview(df, sample_rows).model_dump())
 
 
-@router.get("/artifact/preview", response_model=TablePreviewResponse, summary="浜х墿鏂囦欢棰勮")
+@router.get("/artifact/preview", response_model=TablePreviewResponse, summary="产物文件预览")
 def preview_artifact(
-    file_url: str = Query(..., description="浜х墿鏂囦欢 URL锛屽 /artifacts/xxx.xlsx"),
+    file_url: str = Query(..., description="产物文件 URL，例如 /artifacts/xxx.xlsx"),
     sample_rows: int = Query(200, ge=1, le=2000),
 ):
     file_bytes, filename = _read_artifact_bytes(file_url)
     df = read_table(file_bytes, filename)
     if df.empty:
-        raise HTTPException(status_code=400, detail="浜х墿鏂囦欢涓虹┖")
+        raise HTTPException(status_code=400, detail="产物文件为空")
     return TablePreviewResponse(**_df_to_preview(df, sample_rows).model_dump())
 
 
-@router.post("/clean", response_model=CleanResponse, summary="姝ラ涓€锛氭暟鎹竻娲椾笌瑙勫垯鍒濈瓫")
+@router.post("/clean", response_model=CleanResponse, summary="步骤一：数据清洗与规则初筛")
 async def clean_data(
     file: UploadFile = File(...),
     preview_rows: int = Form(100, ge=1, le=1000),
@@ -241,19 +242,20 @@ async def clean_data(
         df_abnormal = res["df_abnormal"]
         shot_col = res["shot_col"]
 
-        # 瀵煎嚭甯﹁秴閾炬帴鐨?Excel锛堝懡鑴夐€昏緫锛?        hyperlink_cols_n = [shot_col] if shot_col and shot_col in df_normal.columns else None
+        # 导出带超链接的 Excel
+        hyperlink_cols_n = [shot_col] if shot_col and shot_col in df_normal.columns else None
         hyperlink_cols_ab = [shot_col] if shot_col and shot_col in df_abnormal.columns else None
 
-        b_normal = df_to_excel_bytes(df_normal, sheet_name="姝ｅ父", hyperlink_cols=hyperlink_cols_n)
-        b_abnormal = df_to_excel_bytes(df_abnormal, sheet_name="寮傚父", hyperlink_cols=hyperlink_cols_ab)
+        b_normal = df_to_excel_bytes(df_normal, sheet_name="正常", hyperlink_cols=hyperlink_cols_n)
+        b_abnormal = df_to_excel_bytes(df_abnormal, sheet_name="异常", hyperlink_cols=hyperlink_cols_ab)
 
         url_normal = save_artifact(b_normal, "clean_normal")
-        url_abnormal = save_artifact(b_abnormal, "閫€杩愯垂淇℃伅寮傚父闇€鍥炶")
+        url_abnormal = save_artifact(b_abnormal, "clean_abnormal_need_callback")
 
-        # 璁板綍鍘嗗彶
+        # 记录历史
         hist = OperationHistory(
-            stage="姝ラ涓€娓呮礂",
-            action="鎵ц娓呮礂",
+            stage="步骤一清洗",
+            action="执行清洗",
             input_rows=len(df_raw),
             output_rows=len(df_normal) + len(df_abnormal),
             detail={
@@ -279,15 +281,15 @@ async def clean_data(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"鍐呴儴鏈嶅姟鍣ㄩ敊璇? {e}")
+        raise HTTPException(status_code=500, detail=f"内部服务器错误: {e}")
 
 
-@router.post("/match", response_model=MatchResponse, summary="姝ラ浜岋細鍏ュ簱鍗曞彿鍖归厤")
+@router.post("/match", response_model=MatchResponse, summary="步骤二：入库单号匹配")
 async def match_data(
     source_file: Optional[UploadFile] = File(None, description="步骤一正常表"),
-    inbound_file: Optional[UploadFile] = File(None, description="宸插叆搴撶墿娴佸崟鍙疯〃"),
-    source_file_url: str = Form("", description="鍙€夛細姝ラ涓€姝ｅ父琛ㄤ骇鐗?URL"),
-    inbound_file_url: str = Form("", description="鍙€夛細宸插叆搴撶墿娴佸崟鍙疯〃浜х墿 URL"),
+    inbound_file: Optional[UploadFile] = File(None, description="已入库物流单号表"),
+    source_file_url: str = Form("", description="可选：步骤一正常表产物 URL"),
+    inbound_file_url: str = Form("", description="可选：已入库物流单号表产物 URL"),
     preview_rows: int = Form(100, ge=1, le=1000),
     db: Session = Depends(get_db),
 ):
@@ -299,9 +301,9 @@ async def match_data(
             inbound_file, inbound_file_url, "inbound.xlsx"
         )
         if not source_bytes:
-            raise HTTPException(status_code=400, detail="璇蜂笂浼犳楠や竴姝ｅ父琛紝鎴栨彁渚?source_file_url")
+            raise HTTPException(status_code=400, detail="请上传步骤一正常表，或提供 source_file_url")
         if not inbound_bytes:
-            raise HTTPException(status_code=400, detail="璇蜂笂浼犲凡鍏ュ簱鐗╂祦鍗曞彿琛紝鎴栨彁渚?inbound_file_url")
+            raise HTTPException(status_code=400, detail="请上传已入库物流单号表，或提供 inbound_file_url")
 
         res = process_matching(source_bytes, source_filename, inbound_bytes, inbound_filename)
 
@@ -316,12 +318,12 @@ async def match_data(
         b_inbound = df_to_excel_bytes(df_inbound, sheet_name="已入库", hyperlink_cols=hyperlink_cols_inb)
         b_pending = df_to_excel_bytes(df_pending, sheet_name="未入库", hyperlink_cols=hyperlink_cols_pen)
 
-        url_inbound = save_artifact(b_inbound, "鍏ュ簱鍖归厤閫氳繃_寰匒I澶嶆牳")
-        url_pending = save_artifact(b_pending, "鏈叆搴撳緟璺熻繘")
+        url_inbound = save_artifact(b_inbound, "matched_inbound_for_ai")
+        url_pending = save_artifact(b_pending, "not_inbound_followup")
 
         hist = OperationHistory(
             stage="步骤二入库匹配",
-            action="鎵ц鍖归厤",
+            action="执行匹配",
             input_rows=len(df_source),
             output_rows=len(df_inbound) + len(df_pending),
             detail={
@@ -348,14 +350,14 @@ async def match_data(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"鍐呴儴鏈嶅姟鍣ㄩ敊璇? {e}")
+        raise HTTPException(status_code=500, detail=f"内部服务器错误: {e}")
 
 
-@router.post("/ai-task/start", response_model=AITaskResponse, summary="姝ラ涓夛細鍚姩 AI 澶氬浘澶嶆牳寮傛浠诲姟")
+@router.post("/ai-task/start", response_model=AITaskResponse, summary="步骤三：启动 AI 多图复核异步任务")
 async def start_ai_task(
     file: Optional[UploadFile] = File(None),
-    file_url: str = Form("", description="鍙€夛細姝ラ浜屽凡鍏ュ簱琛ㄤ骇鐗?URL"),
-    api_key: str = Form("", description="鍙€夛細鏈浠诲姟浣跨敤鐨?DashScope API Key"),
+    file_url: str = Form("", description="可选：步骤二已入库表产物 URL"),
+    api_key: str = Form("", description="可选：本次任务使用的 DashScope API Key"),
     model_name: str = Form("qwen3-vl-flash"),
     max_images: int = Form(4, ge=1, le=10),
     min_interval_sec: float = Form(0.8, ge=0.0),
@@ -367,18 +369,18 @@ async def start_ai_task(
     filename = "upload.xlsx"
     file_bytes, filename = await _resolve_upload_or_artifact(file, file_url, filename)
     if not file_bytes:
-        raise HTTPException(status_code=400, detail="璇蜂笂浼犲緟澶嶆牳琛ㄦ牸锛屾垨鎻愪緵 file_url")
+        raise HTTPException(status_code=400, detail="请上传待复核表格，或提供 file_url")
 
     effective_api_key = str(api_key or "").strip() or str(settings.DASHSCOPE_API_KEY or "").strip()
     if not effective_api_key:
-        raise HTTPException(status_code=400, detail="缂哄皯 DashScope API Key锛岃鍦ㄩ〉闈㈠～鍐欐垨閰嶇疆鍚庣鐜鍙橀噺")
+        raise HTTPException(status_code=400, detail="缺少 DashScope API Key，请在页面填写或配置后端环境变量")
 
     df_in = read_table(file_bytes, filename)
     if df_in.empty:
-        raise HTTPException(status_code=400, detail="涓婁紶琛ㄦ牸涓虹┖")
+        raise HTTPException(status_code=400, detail="上传表格为空")
 
     if not model_name.strip():
-        raise HTTPException(status_code=400, detail="妯″瀷鍚嶇О涓嶈兘涓虹┖")
+        raise HTTPException(status_code=400, detail="模型名称不能为空")
 
     try:
         req = {"amount": COL_AMOUNT_CANDIDATES, "screenshot": COL_SCREENSHOT_CANDIDATES}
@@ -392,7 +394,8 @@ async def start_ai_task(
         total_rows = min(len(df_in), max_ai_rows)
         df_work = df_in.iloc[:total_rows].copy()
 
-        # 鍒濆鍖?AI 缁撴灉鍒?        df_work[COL_AI_EXTRACTED_AMOUNT] = None
+        # 初始化 AI 结果列
+        df_work[COL_AI_EXTRACTED_AMOUNT] = None
         df_work[COL_AI_MATCH] = None
         df_work[COL_AI_NOTE] = ""
 
@@ -421,10 +424,10 @@ async def start_ai_task(
         )
         db.add(new_task)
 
-        # 璁板綍鍘嗗彶
+        # 记录历史
         hist = OperationHistory(
-            stage="姝ラ涓堿I澶嶆牳",
-            action="鍒涘缓AI浠诲姟",
+            stage="步骤三AI复核",
+            action="创建AI任务",
             input_rows=len(df_in),
             output_rows=0,
             detail={"task_id": task_id, "model": model_name, "max_rows": total_rows},
@@ -433,19 +436,19 @@ async def start_ai_task(
         db.commit()
 
         try:
-            # 鍙戦€佷换鍔＄粰 Celery 闃熷垪
+            # 投递任务到 Celery 队列
             enqueue_ai_task(task_id, effective_api_key)
         except Exception as e:
             new_task.status = "error"
-            new_task.error_message = f"浠诲姟鎶曢€掑け璐? {e}"
+            new_task.error_message = f"任务投递失败: {e}"
             new_task.finished_at = datetime.utcnow()
             db.commit()
-            raise HTTPException(status_code=503, detail="浠诲姟鎶曢€掑け璐ワ紝璇锋鏌?Redis/Celery 鏈嶅姟")
+            raise HTTPException(status_code=503, detail="任务投递失败，请检查 Redis/Celery 服务")
 
         new_task.status = "running"
         db.commit()
 
-        return AITaskResponse(task_id=task_id, status="running", message="浠诲姟宸叉垚鍔熸姇閫掑埌闃熷垪鍚庡彴杩愯")
+        return AITaskResponse(task_id=task_id, status="running", message="任务已成功投递到队列后台运行")
     except HTTPException:
         raise
     except ValueError as e:
@@ -469,7 +472,7 @@ def get_latest_ai_task(
 
     return AITaskResponse(task_id=task.task_id, status=task.status, message="ok")
 
-@router.get("/ai-task/{task_id}/status", response_model=AITaskStatusResponse, summary="杞 AI 浠诲姟杩涘害")
+@router.get("/ai-task/{task_id}/status", response_model=AITaskStatusResponse, summary="轮询 AI 任务进度")
 def get_ai_task_status(task_id: str, db: Session = Depends(get_db)):
     task = db.query(AITask).filter(AITask.task_id == task_id).first()
     if not task:
@@ -478,7 +481,7 @@ def get_ai_task_status(task_id: str, db: Session = Depends(get_db)):
     ok_rows = 0
     bad_rows = 0
     alignment_report: Dict[str, Any] = {}
-    # 涓轰簡淇濊瘉鎺ュ彛鏋侀€熷搷搴旓紝杩欓噷绠€瑕佸姞杞?pkl 缁熻
+    # 为保证接口响应速度，这里仅做轻量统计
     try:
         df = pd.read_pickle(task.df_work_path)
         processed = df[COL_AI_MATCH].notna()
@@ -488,7 +491,7 @@ def get_ai_task_status(task_id: str, db: Session = Depends(get_db)):
         try:
             src_df = pd.read_pickle(task.source_df_path)
             src_scope = src_df.iloc[: min(max(task.total, 0), len(src_df))].copy() if isinstance(src_df, pd.DataFrame) else pd.DataFrame()
-            alignment_report = compare_source_and_processed(src_scope, df, stage_name="姝ラ涓堿I澶嶆牳")
+            alignment_report = compare_source_and_processed(src_scope, df, stage_name="步骤三AI复核")
         except Exception:
             alignment_report = {}
     except Exception:
@@ -517,7 +520,7 @@ def get_ai_task_status(task_id: str, db: Session = Depends(get_db)):
     )
 
 
-@router.get("/ai-task/{task_id}/rows", response_model=AITaskRowsResponse, summary="鏌ョ湅 AI 浠诲姟琛岀骇杩涘害")
+@router.get("/ai-task/{task_id}/rows", response_model=AITaskRowsResponse, summary="查看 AI 任务行级进度")
 def get_ai_task_rows(
     task_id: str,
     scope: str = Query("all", description="all | processed | pending"),
@@ -532,7 +535,7 @@ def get_ai_task_rows(
     try:
         df = pd.read_pickle(task.df_work_path)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"璇诲彇浠诲姟鏁版嵁澶辫触: {e}")
+        raise HTTPException(status_code=500, detail=f"读取任务数据失败: {e}")
 
     if not isinstance(df, pd.DataFrame):
         df = pd.DataFrame()
@@ -569,7 +572,7 @@ def get_ai_task_rows(
     )
 
 
-@router.post("/ai-task/{task_id}/snapshot", response_model=AITaskSnapshotResponse, summary="瀵煎嚭褰撳墠浠诲姟蹇収")
+@router.post("/ai-task/{task_id}/snapshot", response_model=AITaskSnapshotResponse, summary="导出当前任务快照")
 def export_ai_task_snapshot(task_id: str, db: Session = Depends(get_db)):
     task = db.query(AITask).filter(AITask.task_id == task_id).first()
     if not task:
@@ -578,7 +581,7 @@ def export_ai_task_snapshot(task_id: str, db: Session = Depends(get_db)):
     try:
         df_work = pd.read_pickle(task.df_work_path)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"璇诲彇浠诲姟鏁版嵁澶辫触: {e}")
+        raise HTTPException(status_code=500, detail=f"读取任务数据失败: {e}")
 
     try:
         source_df = pd.read_pickle(task.source_df_path)
@@ -604,13 +607,13 @@ def export_ai_task_snapshot(task_id: str, db: Session = Depends(get_db)):
         url_ok = save_artifact(b_ok, "ai_ok_snapshot")
     if not df_bad.empty:
         hyperlink_bad = [shot_col] if shot_col in df_bad.columns else None
-        b_bad = df_to_excel_bytes(df_bad, sheet_name="AI闇€鍥炶", hyperlink_cols=hyperlink_bad)
-        url_bad = save_artifact(b_bad, "AI闇€鍥炶蹇収")
+        b_bad = df_to_excel_bytes(df_bad, sheet_name="AI需回访", hyperlink_cols=hyperlink_bad)
+        url_bad = save_artifact(b_bad, "ai_bad_snapshot")
 
     db.add(
         OperationHistory(
-            stage="姝ラ涓堿I澶嶆牳",
-            action="瀵煎嚭浠诲姟蹇収",
+            stage="步骤三AI复核",
+            action="导出任务快照",
             input_rows=task.total,
             output_rows=task.next_idx,
             detail={
@@ -634,7 +637,7 @@ def export_ai_task_snapshot(task_id: str, db: Session = Depends(get_db)):
     )
 
 
-@router.post("/ai-task/{task_id}/pause", response_model=AITaskResponse, summary="鏆傚仠 AI 浠诲姟")
+@router.post("/ai-task/{task_id}/pause", response_model=AITaskResponse, summary="暂停 AI 任务")
 def pause_ai_task(task_id: str, db: Session = Depends(get_db)):
     task = db.query(AITask).filter(AITask.task_id == task_id).first()
     if not task:
@@ -643,8 +646,8 @@ def pause_ai_task(task_id: str, db: Session = Depends(get_db)):
         task.status = "paused"
         db.add(
             OperationHistory(
-                stage="姝ラ涓堿I澶嶆牳",
-                action="鏆傚仠AI浠诲姟",
+                stage="步骤三AI复核",
+                action="暂停AI任务",
                 input_rows=task.total,
                 output_rows=task.next_idx,
                 detail={"task_id": task.task_id, "status": "paused"},
@@ -654,10 +657,10 @@ def pause_ai_task(task_id: str, db: Session = Depends(get_db)):
     return AITaskResponse(task_id=task.task_id, status=task.status, message="已下发暂停指令")
 
 
-@router.post("/ai-task/{task_id}/resume", response_model=AITaskResponse, summary="鎭㈠ AI 浠诲姟")
+@router.post("/ai-task/{task_id}/resume", response_model=AITaskResponse, summary="恢复 AI 任务")
 def resume_ai_task(
     task_id: str,
-    api_key: str = Form("", description="鍙€夛細鏈鎭㈠浣跨敤鐨?DashScope API Key"),
+    api_key: str = Form("", description="可选：本次恢复使用的 DashScope API Key"),
     min_interval_sec: Optional[float] = Form(None, ge=0.0, description="可选：恢复后更新 AI 最小请求间隔"),
     db: Session = Depends(get_db),
 ):
@@ -670,15 +673,15 @@ def resume_ai_task(
     effective_api_key = str(api_key or "").strip() or str(settings.DASHSCOPE_API_KEY or "").strip()
     if task.status in ["paused", "error", "pending"]:
         if not effective_api_key:
-            raise HTTPException(status_code=400, detail="缁х画浠诲姟缂哄皯 DashScope API Key")
+            raise HTTPException(status_code=400, detail="继续任务缺少 DashScope API Key")
         if min_interval_sec is not None:
             task.min_interval_sec = float(min_interval_sec)
         task.status = "running"
         task.error_message = None
         db.add(
             OperationHistory(
-                stage="姝ラ涓堿I澶嶆牳",
-                action="鎭㈠AI浠诲姟",
+                stage="步骤三AI复核",
+                action="恢复AI任务",
                 input_rows=task.total,
                 output_rows=task.next_idx,
                 detail={"task_id": task.task_id, "status": "running", "min_interval_sec": task.min_interval_sec},
@@ -686,24 +689,24 @@ def resume_ai_task(
         )
         db.commit()
         try:
-            # 閲嶆柊涓嬪彂 Celery 浠诲姟鎭㈠鎵ц
+            # 重新下发 Celery 任务恢复执行
             enqueue_ai_task(task_id, effective_api_key)
         except Exception as e:
             task.status = "error"
-            task.error_message = f"浠诲姟鎭㈠澶辫触: {e}"
+            task.error_message = f"任务恢复失败: {e}"
             db.commit()
-            raise HTTPException(status_code=503, detail="浠诲姟鎭㈠澶辫触锛岃妫€鏌?Redis/Celery 鏈嶅姟")
+            raise HTTPException(status_code=503, detail="任务恢复失败，请检查 Redis/Celery 服务")
     return AITaskResponse(task_id=task.task_id, status=task.status, message="任务已恢复并在后台运行")
 
 
-@router.get("/history", response_model=OperationHistoryListResponse, summary="鏌ヨ鍘嗗彶鎿嶄綔璁板綍")
+@router.get("/history", response_model=OperationHistoryListResponse, summary="查询历史操作记录")
 def list_operation_history(
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     stage: str = Query("", description="按阶段筛选"),
     action: str = Query("", description="按动作模糊筛选"),
-    start_time: Optional[datetime] = Query(None, description="寮€濮嬫椂闂达紝ISO 鎴?YYYY-MM-DD HH:MM:SS"),
-    end_time: Optional[datetime] = Query(None, description="缁撴潫鏃堕棿锛孖SO 鎴?YYYY-MM-DD HH:MM:SS"),
+    start_time: Optional[datetime] = Query(None, description="开始时间，ISO 或 YYYY-MM-DD HH:MM:SS"),
+    end_time: Optional[datetime] = Query(None, description="结束时间，ISO 或 YYYY-MM-DD HH:MM:SS"),
     db: Session = Depends(get_db),
 ):
     if start_time and end_time and start_time > end_time:
@@ -722,12 +725,12 @@ def list_operation_history(
     return OperationHistoryListResponse(total=total, items=items)
 
 
-@router.get("/history/export", summary="瀵煎嚭鍘嗗彶璁板綍 CSV")
+@router.get("/history/export", summary="导出历史记录 CSV")
 def export_operation_history_csv(
     stage: str = Query("", description="按阶段筛选"),
     action: str = Query("", description="按动作模糊筛选"),
-    start_time: Optional[datetime] = Query(None, description="寮€濮嬫椂闂达紝ISO 鎴?YYYY-MM-DD HH:MM:SS"),
-    end_time: Optional[datetime] = Query(None, description="缁撴潫鏃堕棿锛孖SO 鎴?YYYY-MM-DD HH:MM:SS"),
+    start_time: Optional[datetime] = Query(None, description="开始时间，ISO 或 YYYY-MM-DD HH:MM:SS"),
+    end_time: Optional[datetime] = Query(None, description="结束时间，ISO 或 YYYY-MM-DD HH:MM:SS"),
     db: Session = Depends(get_db),
 ):
     if start_time and end_time and start_time > end_time:
