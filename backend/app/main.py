@@ -6,13 +6,12 @@ from fastapi.staticfiles import StaticFiles
 from app.core.config import settings
 from app.api.endpoints import router as api_router
 from app.api.auth import router as auth_router
-from app.db.session import engine
-from app.models import Base
+from app.db.bootstrap import init_database
 
 # =======================
 # 启动时自动建表
 # =======================
-Base.metadata.create_all(bind=engine)
+init_database()
 
 # =======================
 # FastAPI 实例初始化

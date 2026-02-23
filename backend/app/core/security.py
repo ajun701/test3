@@ -21,7 +21,12 @@ def hash_password(password: str) -> str:
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return pwd_context.verify(plain_password, hashed_password)
+    if not hashed_password:
+        return False
+    try:
+        return pwd_context.verify(plain_password, hashed_password)
+    except Exception:
+        return False
 
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
@@ -44,13 +49,13 @@ def get_current_user(
     )
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.JWT_ALGORITHM])
-        username: str = payload.get("sub")
-        if username is None:
+        username = payload.get("sub")
+        if not isinstance(username, str) or not username:
             raise credentials_exception
     except JWTError:
         raise credentials_exception
 
-    user = db.query(User).filter(User.username == username).first()
+    user = db.query(User).filter(User.username == str(username)).first()
     if user is None or not user.is_active:
         raise credentials_exception
     return user
