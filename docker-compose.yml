@@ -16,6 +16,8 @@ services:
       DATABASE_URL: ${DATABASE_URL:-sqlite:////app/data/refund_audit.db}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
       DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY:-}
+      SECRET_KEY: ${SECRET_KEY:-refund-audit-secret-key-change-in-production}
+      REGISTER_SECRET_KEY: ${REGISTER_SECRET_KEY:-16d8udP4JkJEdCUzZcQdd3Pa0P1ws6A52oPiWRPf6nUvKGL}
     volumes:
       - app_data:/app/data
     ports:
@@ -39,6 +41,8 @@ services:
       DATABASE_URL: ${DATABASE_URL:-sqlite:////app/data/refund_audit.db}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
       DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY:-}
+      SECRET_KEY: ${SECRET_KEY:-refund-audit-secret-key-change-in-production}
+      REGISTER_SECRET_KEY: ${REGISTER_SECRET_KEY:-16d8udP4JkJEdCUzZcQdd3Pa0P1ws6A52oPiWRPf6nUvKGL}
     volumes:
       - app_data:/app/data
     depends_on:
