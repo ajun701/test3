@@ -85,9 +85,10 @@
       <el-tab-pane label="2. 入库匹配" name="match">
         <el-form label-width="170px">
           <el-form-item label="使用步骤一正常表">
-            <el-switch v-model="matchUseStep1" :disabled="!cleanRes?.normal_file_url" />
+            <el-switch v-model="matchUseStep1" />
+            <span class="hint" v-if="!cleanRes?.normal_file_url">未检测到步骤一结果，关闭开关后可手动上传源表</span>
           </el-form-item>
-          <el-form-item v-if="!matchUseStep1" label="步骤一正常表">
+          <el-form-item v-if="!matchUseStep1" label="上传待匹配源表">
             <el-upload action="#" :auto-upload="false" :on-change="onMatchSourceFile" :limit="1">
               <el-button>选择文件</el-button>
             </el-upload>
@@ -456,9 +457,12 @@ const onCleanFile = async (f) => {
 }
 const runClean = async () => { if (!cleanFile.value) return ElMessage.warning('请先上传文件'); cleanLoading.value = true; const fd = new FormData(); fd.append('file', cleanFile.value); fd.append('preview_rows', String(cleanPreviewRows.value)); try { cleanRes.value = (await http.post(`${API_BASE}/clean`, fd)).data; ElMessage.success('步骤一完成') } catch (e) { ElMessage.error(errMsg(e, '清洗失败')) } finally { cleanLoading.value = false } }
 
-const matchUseStep1 = ref(true), matchSourceFile = ref(null), matchInboundFile = ref(null), matchLoading = ref(false), matchRes = ref(null), matchPreviewRows = ref(200), matchSourcePreview = ref(null), matchInboundPreview = ref(null), matchSourceShow = ref(50), matchInboundShow = ref(50), matchInboundResShow = ref(50), matchPendingResShow = ref(50)
+const matchUseStep1 = ref(false), matchSourceFile = ref(null), matchInboundFile = ref(null), matchLoading = ref(false), matchRes = ref(null), matchPreviewRows = ref(200), matchSourcePreview = ref(null), matchInboundPreview = ref(null), matchSourceShow = ref(50), matchInboundShow = ref(50), matchInboundResShow = ref(50), matchPendingResShow = ref(50)
 const syncMatchSource = async () => { if (matchUseStep1.value) { matchSourcePreview.value = cleanRes.value?.normal_file_url ? await artifactPreview(cleanRes.value.normal_file_url) : null } else { matchSourcePreview.value = matchSourceFile.value ? await uploadPreview(matchSourceFile.value) : null } }
-watch(matchUseStep1, async () => { try { await syncMatchSource() } catch (e) { ElMessage.error(errMsg(e, '加载源表预览失败')) } })
+watch(matchUseStep1, async (enabled) => {
+  if (enabled && !cleanRes.value?.normal_file_url) ElMessage.warning('当前没有步骤一结果，请关闭开关后上传源表')
+  try { await syncMatchSource() } catch (e) { ElMessage.error(errMsg(e, '加载源表预览失败')) }
+})
 watch(() => cleanRes.value?.normal_file_url, async () => { if (matchUseStep1.value) { try { await syncMatchSource() } catch (e) { ElMessage.error(errMsg(e, '加载步骤一结果失败')) } } })
 const onMatchSourceFile = async (f) => { matchSourceFile.value = f?.raw || null; if (!matchUseStep1.value) { try { await syncMatchSource() } catch (e) { ElMessage.error(errMsg(e, '源表预览失败')) } } }
 const onMatchInboundFile = async (f) => {
