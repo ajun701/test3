@@ -727,23 +727,259 @@ onUnmounted(() => stopPoll())
 </script>
 
 <style scoped>
-.app { max-width: 1320px; margin: 0 auto; padding: 20px; font-family: 'Microsoft YaHei', Arial, sans-serif; }
-.hero { background: linear-gradient(120deg,#0f5ea8,#0f766e); color: #fff; border-radius: 10px; padding: 18px 24px; margin-bottom: 16px; }
-.hero-main { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
-.hero-user { display: flex; align-items: center; gap: 10px; font-size: 14px; }
-.auth-wrap { max-width: 560px; margin: 50px auto; }
-.auth-card { background: #fff; border: 1px solid #dbe3ef; border-radius: 12px; padding: 16px; box-shadow: 0 8px 24px rgba(15, 94, 168, 0.08); }
-.auth-form { padding-top: 8px; }
-.bar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 12px 0; }
-.hint { color: #64748b; font-size: 12px; }
-.panel { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px; margin-top: 12px; }
-.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-.alignment-wrap { margin-top: 10px; }
-.align-stats { margin-top: 10px; }
-.align-table { margin-top: 0; }
-.pager { margin-top: 10px; display: flex; justify-content: flex-end; }
+.app {
+  --ios-bg: #eef4ff;
+  --ios-surface: rgba(255, 255, 255, 0.7);
+  --ios-surface-strong: rgba(255, 255, 255, 0.9);
+  --ios-border: rgba(255, 255, 255, 0.78);
+  --ios-text: #0f172a;
+  --ios-subtext: #475569;
+  --ios-primary: #1476ff;
+  --ios-primary-2: #25a3ff;
+  --ios-shadow: 0 12px 45px rgba(21, 65, 136, 0.12);
+  position: relative;
+  overflow: hidden;
+  max-width: 1320px;
+  margin: 0 auto;
+  padding: 24px;
+  background: linear-gradient(180deg, var(--ios-bg), #f8fbff 42%, #edf5ff);
+  border-radius: 28px;
+  font-family: "SF Pro Display", "SF Pro Text", -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei UI", sans-serif;
+  color: var(--ios-text);
+  animation: page-rise 420ms ease-out;
+}
+
+.app::before,
+.app::after {
+  content: "";
+  position: absolute;
+  border-radius: 999px;
+  filter: blur(24px);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.app::before {
+  width: 440px;
+  height: 440px;
+  left: -140px;
+  top: -180px;
+  background: radial-gradient(circle, rgba(86, 175, 255, 0.38) 0%, rgba(86, 175, 255, 0) 70%);
+}
+
+.app::after {
+  width: 520px;
+  height: 520px;
+  right: -190px;
+  bottom: -210px;
+  background: radial-gradient(circle, rgba(25, 125, 255, 0.26) 0%, rgba(25, 125, 255, 0) 72%);
+}
+
+.app > * {
+  position: relative;
+  z-index: 1;
+}
+
+.hero {
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.45), rgba(255, 255, 255, 0.15)),
+    linear-gradient(122deg, #1476ff, #24a4ff 58%, #17b5be);
+  color: #f8fbff;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 24px;
+  padding: 22px 26px;
+  margin-bottom: 18px;
+  box-shadow: var(--ios-shadow);
+  backdrop-filter: blur(16px);
+}
+
+.hero h1 {
+  margin: 0 0 6px;
+  font-size: 30px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+}
+
+.hero p {
+  margin: 0;
+  opacity: 0.88;
+}
+
+.hero-main {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.hero-user {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+}
+
+.auth-wrap {
+  max-width: 580px;
+  margin: 48px auto;
+}
+
+.auth-card,
+.panel {
+  background: var(--ios-surface);
+  border: 1px solid var(--ios-border);
+  border-radius: 20px;
+  box-shadow: var(--ios-shadow);
+  backdrop-filter: blur(18px);
+}
+
+.auth-card {
+  padding: 18px;
+}
+
+.auth-form {
+  padding-top: 8px;
+}
+
+.bar {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin: 12px 0;
+}
+
+.hint {
+  color: var(--ios-subtext);
+  font-size: 12px;
+}
+
+.panel {
+  padding: 14px;
+  margin-top: 12px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.alignment-wrap {
+  margin-top: 10px;
+}
+
+.align-stats {
+  margin-top: 10px;
+}
+
+.align-table {
+  margin-top: 0;
+}
+
+.pager {
+  margin-top: 10px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.app :deep(.el-tabs--border-card) {
+  border: 1px solid var(--ios-border);
+  border-radius: 22px;
+  background: var(--ios-surface);
+  box-shadow: var(--ios-shadow);
+  overflow: hidden;
+}
+
+.app :deep(.el-tabs--border-card > .el-tabs__content) {
+  background: transparent;
+}
+
+.app :deep(.el-tabs--border-card > .el-tabs__header) {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.62), rgba(255, 255, 255, 0.3));
+  border-bottom: 1px solid rgba(255, 255, 255, 0.66);
+}
+
+.app :deep(.el-tabs__item) {
+  color: var(--ios-subtext);
+  font-weight: 520;
+}
+
+.app :deep(.el-tabs__item.is-active) {
+  color: var(--ios-text);
+}
+
+.app :deep(.el-upload-dragger) {
+  border-radius: 16px;
+  border: 1px dashed rgba(20, 118, 255, 0.38);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.76), rgba(255, 255, 255, 0.52));
+}
+
+.app :deep(.el-input__wrapper),
+.app :deep(.el-textarea__inner),
+.app :deep(.el-select__wrapper) {
+  border-radius: 12px;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.72) inset, 0 8px 18px rgba(30, 70, 120, 0.08);
+  background: var(--ios-surface-strong);
+}
+
+.app :deep(.el-button) {
+  border-radius: 12px;
+  font-weight: 520;
+  border-color: rgba(16, 24, 40, 0.08);
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.app :deep(.el-button:hover) {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 20px rgba(31, 78, 145, 0.14);
+}
+
+.app :deep(.el-button--primary) {
+  background: linear-gradient(135deg, var(--ios-primary), var(--ios-primary-2));
+  border-color: rgba(20, 118, 255, 0.55);
+}
+
+.app :deep(.el-table) {
+  --el-table-border-color: rgba(184, 205, 236, 0.54);
+  --el-table-header-bg-color: rgba(234, 244, 255, 0.72);
+  --el-table-row-hover-bg-color: rgba(218, 236, 255, 0.52);
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.app :deep(.el-alert) {
+  border-radius: 12px;
+}
+
+@keyframes page-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 @media (max-width: 980px) {
-  .grid { grid-template-columns: 1fr; }
-  .hero-main { align-items: flex-start; }
+  .app {
+    padding: 14px;
+  }
+  .grid {
+    grid-template-columns: 1fr;
+  }
+  .hero-main {
+    align-items: flex-start;
+  }
+  .hero h1 {
+    font-size: 24px;
+  }
 }
 </style>
