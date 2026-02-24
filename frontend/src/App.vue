@@ -1,5 +1,5 @@
 ﻿<template>
-  <div class="app">
+  <div class="app" :class="{ dark: isDark }">
     <div v-if="!isAuthenticated" class="auth-wrap">
       <header class="hero">
         <h1>退运费智能审核中台</h1>
@@ -47,6 +47,17 @@
           <p>Vue3 + FastAPI + Celery</p>
         </div>
         <div class="hero-user">
+          <div class="theme-toggle">
+            <span>{{ isDark ? '深色' : '浅色' }}</span>
+            <el-switch
+              v-model="isDark"
+              size="small"
+              inline-prompt
+              active-text="夜"
+              inactive-text="昼"
+              @change="onThemeChange"
+            />
+          </div>
           <span>当前用户：{{ me?.username }}</span>
           <el-button type="info" plain @click="logout">退出登录</el-button>
         </div>
@@ -303,10 +314,12 @@ const runtimeBackendPort = import.meta.env.VITE_BACKEND_PORT || '8000'
 const API_BASE = import.meta.env.VITE_API_BASE || `http://${runtimeHost}:${runtimeBackendPort}/api/v1`
 const BASE_URL = import.meta.env.VITE_BASE_URL || `http://${runtimeHost}:${runtimeBackendPort}`
 const AUTH_TOKEN_KEY = 'refund_audit_auth_token'
+const THEME_MODE_KEY = 'refund_audit_theme_mode'
 const AI_TASK_ID_KEY = 'refund_audit_active_task_id'
 const AI_SPEED_SETTINGS_KEY = 'refund_audit_ai_speed_settings'
 const http = axios.create({ timeout: 30000 })
 const tab = ref('clean')
+const isDark = ref(false)
 const opts = [{l:'20',v:20},{l:'50',v:50},{l:'100',v:100},{l:'200',v:200},{l:'500',v:500},{l:'全部',v:0}]
 const errMsg = (e, d='请求失败') => (typeof e?.response?.data?.detail === 'string' ? e.response.data.detail : d)
 const abs = (u) => (!u ? '' : (String(u).startsWith('http') ? u : `${BASE_URL}/${String(u).replace(/^\/+/, '')}`))
@@ -330,18 +343,34 @@ const getStoredToken = () => {
   if (typeof window === 'undefined') return ''
   return String(window.localStorage.getItem(AUTH_TOKEN_KEY) || '').trim()
 }
+const getStoredThemeMode = () => {
+  if (typeof window === 'undefined') return 'light'
+  const raw = String(window.localStorage.getItem(THEME_MODE_KEY) || '').trim().toLowerCase()
+  return raw === 'dark' ? 'dark' : 'light'
+}
 const setStoredToken = (token) => {
   if (typeof window === 'undefined') return
   const v = String(token || '').trim()
   if (v) window.localStorage.setItem(AUTH_TOKEN_KEY, v)
   else window.localStorage.removeItem(AUTH_TOKEN_KEY)
 }
+const applyThemeMode = (dark) => {
+  if (typeof document === 'undefined') return
+  document.body.classList.toggle('dark-mode', Boolean(dark))
+}
+const setThemeMode = (dark) => {
+  isDark.value = Boolean(dark)
+  applyThemeMode(isDark.value)
+  if (typeof window !== 'undefined') window.localStorage.setItem(THEME_MODE_KEY, isDark.value ? 'dark' : 'light')
+}
+const onThemeChange = (v) => setThemeMode(Boolean(v))
 const applyAuthHeader = (token) => {
   const v = String(token || '').trim()
   if (v) http.defaults.headers.common.Authorization = `Bearer ${v}`
   else delete http.defaults.headers.common.Authorization
 }
 
+setThemeMode(getStoredThemeMode() === 'dark')
 const authToken = ref(getStoredToken())
 applyAuthHeader(authToken.value)
 const me = ref(null)
@@ -768,6 +797,26 @@ onUnmounted(() => stopPoll())
   animation: background-flow 22s ease infinite;
 }
 
+:global(body.dark-mode) {
+  background:
+    radial-gradient(1200px 700px at 10% -10%, rgba(36, 96, 186, 0.5), rgba(36, 96, 186, 0)),
+    radial-gradient(1100px 700px at 95% 0%, rgba(17, 162, 171, 0.42), rgba(17, 162, 171, 0)),
+    linear-gradient(130deg, #071224 0%, #0b1a30 40%, #0a1e37 72%, #08182f 100%);
+  background-size: 185% 185%;
+}
+
+.app.dark {
+  --ios-surface: rgba(12, 23, 41, 0.58);
+  --ios-surface-strong: rgba(14, 27, 47, 0.82);
+  --ios-border: rgba(135, 166, 214, 0.22);
+  --ios-text: #dbe9ff;
+  --ios-subtext: #9eb4d8;
+  --ios-primary: #4a8dff;
+  --ios-primary-2: #1ec1ff;
+  --ios-shadow: 0 24px 55px rgba(0, 0, 0, 0.44);
+  --ios-shadow-soft: 0 10px 28px rgba(0, 0, 0, 0.36);
+}
+
 .app::before,
 .app::after {
   content: "";
@@ -844,6 +893,22 @@ onUnmounted(() => stopPoll())
   background: rgba(255, 255, 255, 0.24);
   border: 1px solid rgba(255, 255, 255, 0.34);
   box-shadow: 0 8px 22px rgba(35, 91, 158, 0.2);
+}
+
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px 5px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.32);
+  font-size: 12px;
+}
+
+.theme-toggle :deep(.el-switch.is-checked .el-switch__core) {
+  border-color: rgba(79, 169, 255, 0.95);
+  background: linear-gradient(135deg, #4b91ff, #1dc1ff);
 }
 
 .auth-wrap {
@@ -1010,6 +1075,60 @@ onUnmounted(() => stopPoll())
 
 .app :deep(.el-alert) {
   border-radius: 12px;
+}
+
+.app.dark .hero {
+  background:
+    linear-gradient(132deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.03)),
+    linear-gradient(122deg, #0f4eaf, #1f77d2 52%, #108c9a 100%);
+  border-color: rgba(130, 173, 240, 0.32);
+}
+
+.app.dark .hero-user,
+.app.dark .theme-toggle {
+  background: rgba(11, 29, 55, 0.45);
+  border-color: rgba(139, 173, 222, 0.34);
+}
+
+.app.dark :deep(.el-tabs--border-card > .el-tabs__header) {
+  border-color: rgba(130, 169, 222, 0.25);
+  background: linear-gradient(180deg, rgba(10, 30, 56, 0.8), rgba(10, 28, 50, 0.62));
+}
+
+.app.dark :deep(.el-tabs__item:hover) {
+  color: #d5e8ff;
+  background: rgba(20, 48, 82, 0.55);
+}
+
+.app.dark :deep(.el-tabs__item.is-active) {
+  color: #eaf3ff;
+  background: rgba(22, 55, 95, 0.78);
+  box-shadow: 0 10px 18px rgba(0, 0, 0, 0.26);
+}
+
+.app.dark :deep(.el-upload-dragger) {
+  border-color: rgba(96, 162, 255, 0.45);
+  background: linear-gradient(180deg, rgba(13, 34, 62, 0.86), rgba(11, 28, 50, 0.7));
+}
+
+.app.dark :deep(.el-input__wrapper),
+.app.dark :deep(.el-textarea__inner),
+.app.dark :deep(.el-select__wrapper) {
+  box-shadow: 0 0 0 1px rgba(128, 164, 218, 0.28) inset, 0 10px 18px rgba(0, 0, 0, 0.24);
+}
+
+.app.dark :deep(.el-button) {
+  border-color: rgba(128, 163, 214, 0.3);
+}
+
+.app.dark :deep(.el-table) {
+  --el-table-border-color: rgba(96, 123, 170, 0.42);
+  --el-table-header-bg-color: rgba(11, 29, 54, 0.84);
+  --el-table-row-hover-bg-color: rgba(23, 57, 97, 0.62);
+  --el-table-text-color: #d6e5ff;
+  --el-table-header-text-color: #c6daf9;
+  --el-table-bg-color: rgba(10, 24, 44, 0.5);
+  --el-fill-color-lighter: rgba(15, 36, 64, 0.54);
 }
 
 @keyframes section-rise {
