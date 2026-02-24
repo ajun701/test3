@@ -1,54 +1,55 @@
-# app/main.py
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy import text
 
-from app.core.config import settings
+from app.api.auth_endpoints import router as auth_router
 from app.api.endpoints import router as api_router
+from app.core.auth import get_current_user
+from app.core.config import settings
 from app.db.session import engine
 from app.models import Base
 
-# =======================
-# 启动时自动建表
-# =======================
-Base.metadata.create_all(bind=engine)
 
-# =======================
-# FastAPI 实例初始化
-# =======================
+def ensure_runtime_schema() -> None:
+    """Create missing tables and apply lightweight compatibility patches."""
+
+    Base.metadata.create_all(bind=engine)
+    if not settings.DATABASE_URL.startswith("sqlite"):
+        return
+
+    with engine.begin() as conn:
+        cols = conn.execute(text("PRAGMA table_info(ai_tasks)")).fetchall()
+        col_names = {str(c[1]) for c in cols}
+        if "operator" not in col_names:
+            conn.execute(text("ALTER TABLE ai_tasks ADD COLUMN operator VARCHAR(50) DEFAULT 'system'"))
+
+
+ensure_runtime_schema()
+
 app = FastAPI(
     title=settings.PROJECT_NAME,
-    description="叠纸心意旗舰店 - 退运费智能审核系统后端 API",
-    version="2.0.0",
-    openapi_url=f"{settings.API_V1_STR}/openapi.json"
+    description="退运费智能审核系统后端 API",
+    version="2.1.0",
+    openapi_url=f"{settings.API_V1_STR}/openapi.json",
 )
 
-# =======================
-# 配置跨域请求 (CORS) - 供 Vue/React 前端调用
-# =======================
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 生产环境请改为前端实际域名
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# =======================
-# 注册路由组
-# =======================
-app.include_router(api_router, prefix=settings.API_V1_STR)
+# Open endpoints: register/login/me
+app.include_router(auth_router, prefix=settings.API_V1_STR)
+# Business endpoints: require valid bearer token
+app.include_router(api_router, prefix=settings.API_V1_STR, dependencies=[Depends(get_current_user)])
 
-# =======================
-# 挂载静态文件目录 (用于对外提供 Artifacts / Excel 下载)
-# 前端可通过 /artifacts/... 访问生成的 Excel
-# =======================
 app.mount("/artifacts", StaticFiles(directory=settings.ARTIFACT_DIR), name="artifacts")
+
 
 @app.get("/", tags=["Health Check"])
 def root():
-    return {
-        "message": "Welcome to Refund Audit System API",
-        "docs_url": "/docs",
-        "status": "Running"
-    }
+    return {"message": "Welcome to Refund Audit System API", "docs_url": "/docs", "status": "Running"}
