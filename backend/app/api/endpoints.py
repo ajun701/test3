@@ -344,7 +344,7 @@ async def clean_data(
             action="执行清洗",
             operator=current_user.username,
             input_rows=len(df_raw),
-            output_rows=len(df_normal) + len(df_abnormal),
+            output_rows=len(df_normal) + len(df_abnormal) + len(df_over_limit),
             detail={
                 "source_file": filename,
                 "normal_rows": len(df_normal),

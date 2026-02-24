@@ -308,9 +308,10 @@ def process_cleaning(file_bytes: bytes, filename: str) -> Dict[str, Any]:
     df[COL_ABNORMAL_REASON] = reasons
     valid_mask = pd.Series(flags, index=df.index)
     over_limit_only_mask = pd.Series(over_limit_only_flags, index=df.index)
+    abnormal_mask = (~valid_mask) & (~over_limit_only_mask)
 
     df_normal = df[valid_mask].drop(columns=[COL_ABNORMAL_REASON], errors="ignore").copy()
-    df_abnormal = df[~valid_mask].copy()
+    df_abnormal = df[abnormal_mask].copy()
     df_over_limit = df[over_limit_only_mask].copy()
     report = compare_source_and_processed(df_raw, df, stage_name="步骤一清洗")
 
