@@ -728,74 +728,91 @@ onUnmounted(() => stopPoll())
 
 <style scoped>
 .app {
-  --ios-bg: #eef4ff;
-  --ios-surface: rgba(255, 255, 255, 0.7);
-  --ios-surface-strong: rgba(255, 255, 255, 0.9);
-  --ios-border: rgba(255, 255, 255, 0.78);
-  --ios-text: #0f172a;
-  --ios-subtext: #475569;
+  --ios-surface: rgba(255, 255, 255, 0.64);
+  --ios-surface-strong: rgba(255, 255, 255, 0.84);
+  --ios-border: rgba(255, 255, 255, 0.72);
+  --ios-text: #0b1a33;
+  --ios-subtext: #49628a;
   --ios-primary: #1476ff;
-  --ios-primary-2: #25a3ff;
-  --ios-shadow: 0 12px 45px rgba(21, 65, 136, 0.12);
+  --ios-primary-2: #1eb8ff;
+  --ios-shadow: 0 20px 50px rgba(30, 76, 139, 0.16);
+  --ios-shadow-soft: 0 8px 24px rgba(25, 66, 124, 0.12);
   position: relative;
-  overflow: hidden;
+  overflow: visible;
+  isolation: isolate;
   max-width: 1320px;
   margin: 0 auto;
-  padding: 24px;
-  background: linear-gradient(180deg, var(--ios-bg), #f8fbff 42%, #edf5ff);
-  border-radius: 28px;
+  padding: 20px 20px 30px;
   font-family: "SF Pro Display", "SF Pro Text", -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei UI", sans-serif;
   color: var(--ios-text);
-  animation: page-rise 420ms ease-out;
+  animation: section-rise 420ms ease-out;
+}
+
+:global(html),
+:global(body),
+:global(#app) {
+  min-height: 100%;
+}
+
+:global(body) {
+  margin: 0;
+  background:
+    radial-gradient(1200px 600px at 10% -10%, rgba(126, 185, 255, 0.55), rgba(126, 185, 255, 0)),
+    radial-gradient(1100px 700px at 95% 0%, rgba(72, 218, 226, 0.42), rgba(72, 218, 226, 0)),
+    linear-gradient(135deg, #edf5ff 0%, #f5f9ff 38%, #eff8ff 68%, #ebf4ff 100%);
+  background-size: 180% 180%;
+  animation: background-flow 22s ease infinite;
 }
 
 .app::before,
 .app::after {
   content: "";
-  position: absolute;
+  position: fixed;
   border-radius: 999px;
-  filter: blur(24px);
+  filter: blur(58px);
   pointer-events: none;
-  z-index: 0;
+  z-index: -2;
 }
 
 .app::before {
-  width: 440px;
-  height: 440px;
-  left: -140px;
-  top: -180px;
-  background: radial-gradient(circle, rgba(86, 175, 255, 0.38) 0%, rgba(86, 175, 255, 0) 70%);
+  width: 560px;
+  height: 560px;
+  left: -120px;
+  top: -150px;
+  background: radial-gradient(circle, rgba(94, 173, 255, 0.35) 0%, rgba(94, 173, 255, 0) 72%);
+  animation: aura-float-a 17s ease-in-out infinite alternate;
 }
 
 .app::after {
-  width: 520px;
-  height: 520px;
-  right: -190px;
-  bottom: -210px;
-  background: radial-gradient(circle, rgba(25, 125, 255, 0.26) 0%, rgba(25, 125, 255, 0) 72%);
+  width: 580px;
+  height: 580px;
+  right: -170px;
+  bottom: -220px;
+  background: radial-gradient(circle, rgba(53, 208, 214, 0.28) 0%, rgba(53, 208, 214, 0) 74%);
+  animation: aura-float-b 15s ease-in-out infinite alternate;
 }
 
 .app > * {
   position: relative;
-  z-index: 1;
+  z-index: 2;
 }
 
 .hero {
   background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.45), rgba(255, 255, 255, 0.15)),
-    linear-gradient(122deg, #1476ff, #24a4ff 58%, #17b5be);
+    linear-gradient(128deg, rgba(255, 255, 255, 0.3), rgba(255, 255, 255, 0.08)),
+    linear-gradient(122deg, #1476ff, #46a6ff 54%, #19bcc5 100%);
   color: #f8fbff;
-  border: 1px solid rgba(255, 255, 255, 0.35);
-  border-radius: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 22px;
   padding: 22px 26px;
-  margin-bottom: 18px;
+  margin-bottom: 16px;
   box-shadow: var(--ios-shadow);
-  backdrop-filter: blur(16px);
+  backdrop-filter: blur(20px) saturate(120%);
 }
 
 .hero h1 {
   margin: 0 0 6px;
-  font-size: 30px;
+  font-size: 34px;
   font-weight: 650;
   letter-spacing: 0.02em;
 }
@@ -818,24 +835,25 @@ onUnmounted(() => stopPoll())
   align-items: center;
   gap: 10px;
   font-size: 14px;
-  padding: 8px 12px;
+  padding: 9px 12px;
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.2);
-  border: 1px solid rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.24);
+  border: 1px solid rgba(255, 255, 255, 0.34);
+  box-shadow: 0 8px 22px rgba(35, 91, 158, 0.2);
 }
 
 .auth-wrap {
-  max-width: 580px;
-  margin: 48px auto;
+  max-width: 560px;
+  margin: 40px auto;
 }
 
 .auth-card,
 .panel {
   background: var(--ios-surface);
   border: 1px solid var(--ios-border);
-  border-radius: 20px;
-  box-shadow: var(--ios-shadow);
-  backdrop-filter: blur(18px);
+  border-radius: 18px;
+  box-shadow: var(--ios-shadow-soft);
+  backdrop-filter: blur(16px) saturate(120%);
 }
 
 .auth-card {
@@ -864,6 +882,12 @@ onUnmounted(() => stopPoll())
   margin-top: 12px;
 }
 
+.panel :deep(.panel),
+.panel :deep(.el-table),
+.panel :deep(.el-alert) {
+  background: rgba(255, 255, 255, 0.66);
+}
+
 .grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -889,42 +913,68 @@ onUnmounted(() => stopPoll())
 }
 
 .app :deep(.el-tabs--border-card) {
-  border: 1px solid var(--ios-border);
-  border-radius: 22px;
-  background: var(--ios-surface);
-  box-shadow: var(--ios-shadow);
-  overflow: hidden;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  overflow: visible;
 }
 
 .app :deep(.el-tabs--border-card > .el-tabs__content) {
   background: transparent;
+  padding: 2px 0 0;
 }
 
 .app :deep(.el-tabs--border-card > .el-tabs__header) {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.62), rgba(255, 255, 255, 0.3));
-  border-bottom: 1px solid rgba(255, 255, 255, 0.66);
+  margin: 0 0 12px;
+  border: 1px solid rgba(255, 255, 255, 0.74);
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.68), rgba(255, 255, 255, 0.42));
+  box-shadow: var(--ios-shadow-soft);
+  backdrop-filter: blur(14px);
+  padding: 4px 8px;
+}
+
+.app :deep(.el-tabs--border-card > .el-tabs__header .el-tabs__nav-wrap::after) {
+  display: none;
 }
 
 .app :deep(.el-tabs__item) {
   color: var(--ios-subtext);
   font-weight: 520;
+  border-radius: 10px;
+  transition: all 0.2s ease;
+}
+
+.app :deep(.el-tabs__item:hover) {
+  color: #1b4d92;
+  background: rgba(255, 255, 255, 0.6);
 }
 
 .app :deep(.el-tabs__item.is-active) {
   color: var(--ios-text);
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow: 0 6px 14px rgba(29, 76, 139, 0.14);
 }
 
 .app :deep(.el-upload-dragger) {
   border-radius: 16px;
-  border: 1px dashed rgba(20, 118, 255, 0.38);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.76), rgba(255, 255, 255, 0.52));
+  border: 1px dashed rgba(20, 118, 255, 0.32);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.84), rgba(255, 255, 255, 0.58));
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.app :deep(.el-upload-dragger:hover) {
+  transform: translateY(-2px);
+  border-color: rgba(20, 118, 255, 0.55);
+  box-shadow: 0 16px 30px rgba(40, 92, 160, 0.14);
 }
 
 .app :deep(.el-input__wrapper),
 .app :deep(.el-textarea__inner),
 .app :deep(.el-select__wrapper) {
   border-radius: 12px;
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.72) inset, 0 8px 18px rgba(30, 70, 120, 0.08);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.76) inset, 0 9px 18px rgba(30, 70, 120, 0.08);
   background: var(--ios-surface-strong);
 }
 
@@ -933,11 +983,12 @@ onUnmounted(() => stopPoll())
   font-weight: 520;
   border-color: rgba(16, 24, 40, 0.08);
   transition: transform 0.18s ease, box-shadow 0.18s ease;
+  backdrop-filter: blur(10px);
 }
 
 .app :deep(.el-button:hover) {
   transform: translateY(-1px);
-  box-shadow: 0 10px 20px rgba(31, 78, 145, 0.14);
+  box-shadow: 0 12px 20px rgba(31, 78, 145, 0.15);
 }
 
 .app :deep(.el-button--primary) {
@@ -947,7 +998,7 @@ onUnmounted(() => stopPoll())
 
 .app :deep(.el-table) {
   --el-table-border-color: rgba(184, 205, 236, 0.54);
-  --el-table-header-bg-color: rgba(234, 244, 255, 0.72);
+  --el-table-header-bg-color: rgba(228, 241, 255, 0.8);
   --el-table-row-hover-bg-color: rgba(218, 236, 255, 0.52);
   border-radius: 14px;
   overflow: hidden;
@@ -957,7 +1008,7 @@ onUnmounted(() => stopPoll())
   border-radius: 12px;
 }
 
-@keyframes page-rise {
+@keyframes section-rise {
   from {
     opacity: 0;
     transform: translateY(8px);
@@ -965,6 +1016,36 @@ onUnmounted(() => stopPoll())
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@keyframes background-flow {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+@keyframes aura-float-a {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(80px, 40px, 0);
+  }
+}
+
+@keyframes aura-float-b {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(-90px, -35px, 0);
   }
 }
 
@@ -979,7 +1060,10 @@ onUnmounted(() => stopPoll())
     align-items: flex-start;
   }
   .hero h1 {
-    font-size: 24px;
+    font-size: 27px;
+  }
+  .app :deep(.el-tabs--border-card > .el-tabs__header) {
+    border-radius: 12px;
   }
 }
 </style>
