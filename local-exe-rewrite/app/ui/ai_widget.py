@@ -60,6 +60,7 @@ class AIWidget(QWidget):
         self.task_id = ""
         self.rows_page = 1
         self._last_log_text = ""
+        self._poll_error_count = 0
 
         self.timer = QTimer(self)
         self.timer.setInterval(1500)
@@ -607,7 +608,12 @@ class AIWidget(QWidget):
     def _poll(self) -> None:
         try:
             self.refresh_panels()
+            self._poll_error_count = 0
         except Exception as exc:
+            self._poll_error_count += 1
+            if self._poll_error_count < 3:
+                self.status_detail_label.setText(f"状态：轮询异常重试中（{self._poll_error_count}/3）")
+                return
             self.timer.stop()
             show_error(self, f"任务轮询失败: {exc}")
 
@@ -615,6 +621,7 @@ class AIWidget(QWidget):
         self.task_id = str(task_id or "").strip()
         self.rows_page = 1
         self._last_log_text = ""
+        self._poll_error_count = 0
         if self.task_id:
             self.refresh_panels()
 

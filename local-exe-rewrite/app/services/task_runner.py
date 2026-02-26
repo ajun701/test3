@@ -91,6 +91,26 @@ class AITaskRunner:
         self._threads: dict[str, threading.Thread] = {}
         self._lock = threading.Lock()
 
+    @staticmethod
+    def _atomic_pickle_dump(df: pd.DataFrame, path_text: str) -> None:
+        path = Path(str(path_text))
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_name(path.name + ".tmp")
+        df.to_pickle(tmp)
+        tmp.replace(path)
+
+    @staticmethod
+    def _read_pickle_with_retry(path_text: str, retries: int = 3, wait_sec: float = 0.05) -> pd.DataFrame:
+        last_exc: Exception | None = None
+        for idx in range(max(int(retries), 1)):
+            try:
+                return pd.read_pickle(path_text)
+            except Exception as exc:
+                last_exc = exc
+                if idx < retries - 1:
+                    time.sleep(wait_sec * (idx + 1))
+        raise ValueError(f"读取任务数据失败: {last_exc}") from last_exc
+
     def _log_path(self, task_id: str) -> Path:
         return settings.task_dir / f"{str(task_id or '').strip()}.log"
 
@@ -193,8 +213,8 @@ class AITaskRunner:
         df_path = settings.task_dir / f"{task_id}_work.pkl"
         src_path = settings.task_dir / f"{task_id}_source.pkl"
 
-        df_work.to_pickle(df_path)
-        df_in.to_pickle(src_path)
+        self._atomic_pickle_dump(df_work, str(df_path))
+        self._atomic_pickle_dump(df_in, str(src_path))
 
         task = AITask(
             task_id=task_id,
@@ -280,7 +300,7 @@ class AITaskRunner:
                 db.commit()
                 return
 
-            df_work = pd.read_pickle(task.df_work_path)
+            df_work = self._read_pickle_with_retry(task.df_work_path, retries=4, wait_sec=0.03)
             if task.total > len(df_work):
                 task.total = len(df_work)
                 db.commit()
@@ -291,7 +311,7 @@ class AITaskRunner:
             while task.next_idx < task.total:
                 db.refresh(task)
                 if task.status != "running":
-                    df_work.to_pickle(task.df_work_path)
+                    self._atomic_pickle_dump(df_work, task.df_work_path)
                     self._append_runtime_log(task_id, f"任务状态变更为 {task.status}，线程安全退出。")
                     return
 
@@ -344,7 +364,7 @@ class AITaskRunner:
                 task.updated_at = datetime.utcnow()
 
                 if task.next_idx % 10 == 0 or task.next_idx >= task.total:
-                    df_work.to_pickle(task.df_work_path)
+                    self._atomic_pickle_dump(df_work, task.df_work_path)
                     self._append_runtime_log(task_id, f"已持久化进度：{task.next_idx}/{task.total}。")
 
                 db.commit()
@@ -361,7 +381,7 @@ class AITaskRunner:
             df_pending = pd.DataFrame()
             report_step3 = {}
             try:
-                df_source = pd.read_pickle(task.source_df_path)
+                df_source = self._read_pickle_with_retry(task.source_df_path, retries=4, wait_sec=0.03)
                 if len(df_source) > task.total:
                     df_pending = df_source.iloc[task.total:].copy()
                 src_scope = df_source.iloc[: min(max(task.total, 0), len(df_source))].copy()
@@ -479,7 +499,7 @@ class AITaskRunner:
         alignment_report: Dict[str, Any] = {}
 
         try:
-            df = pd.read_pickle(task.df_work_path)
+            df = self._read_pickle_with_retry(task.df_work_path, retries=4, wait_sec=0.03)
             if not isinstance(df, pd.DataFrame):
                 df = pd.DataFrame()
             if COL_AI_MATCH in df.columns:
@@ -527,10 +547,7 @@ class AITaskRunner:
             raise ValueError("任务不存在")
         self._ensure_access(task, current_user)
 
-        try:
-            df = pd.read_pickle(task.df_work_path)
-        except Exception as exc:
-            raise ValueError(f"读取任务数据失败: {exc}") from exc
+        df = self._read_pickle_with_retry(task.df_work_path, retries=5, wait_sec=0.04)
 
         if not isinstance(df, pd.DataFrame):
             df = pd.DataFrame()
@@ -643,9 +660,9 @@ class AITaskRunner:
         self._ensure_access(task, current_user)
 
         try:
-            df_work = pd.read_pickle(task.df_work_path)
+            df_work = self._read_pickle_with_retry(task.df_work_path, retries=5, wait_sec=0.04)
         except Exception as exc:
-            raise ValueError(f"读取任务数据失败: {exc}") from exc
+            raise ValueError(str(exc)) from exc
 
         if not isinstance(df_work, pd.DataFrame):
             df_work = pd.DataFrame()
@@ -683,12 +700,12 @@ class AITaskRunner:
         self._ensure_access(task, current_user)
 
         try:
-            df_work = pd.read_pickle(task.df_work_path)
+            df_work = self._read_pickle_with_retry(task.df_work_path, retries=5, wait_sec=0.04)
         except Exception as exc:
-            raise ValueError(f"读取任务数据失败: {exc}") from exc
+            raise ValueError(str(exc)) from exc
 
         try:
-            source_df = pd.read_pickle(task.source_df_path)
+            source_df = self._read_pickle_with_retry(task.source_df_path, retries=4, wait_sec=0.03)
         except Exception:
             source_df = pd.DataFrame()
 
