@@ -47,6 +47,12 @@ class CleanWidget(QWidget):
         finally:
             db.close()
 
+    @staticmethod
+    def _ratio_text(part: int, total: int) -> str:
+        if total <= 0:
+            return "占比 0.0%"
+        return f"占比 {part * 100.0 / total:.1f}%"
+
     def _build_ui(self) -> None:
         layout = QVBoxLayout(self)
 
@@ -79,10 +85,10 @@ class CleanWidget(QWidget):
         result_box = QGroupBox("清洗结果")
         result_layout = QVBoxLayout(result_box)
         card_row = QHBoxLayout()
-        self.card_total = StatCard("总行", "0", accent="primary")
-        self.card_normal = StatCard("正常", "0", accent="success")
-        self.card_abnormal = StatCard("异常", "0", accent="warning")
-        self.card_over = StatCard("超12其余正常", "0", accent="info")
+        self.card_total = StatCard("总行", "0", accent="primary", meta="上传行数")
+        self.card_normal = StatCard("正常", "0", accent="success", meta="占比 0.0%")
+        self.card_abnormal = StatCard("异常", "0", accent="warning", meta="占比 0.0%")
+        self.card_over = StatCard("超12其余正常", "0", accent="info", meta="占比 0.0%")
         card_row.addWidget(self.card_total)
         card_row.addWidget(self.card_normal)
         card_row.addWidget(self.card_abnormal)
@@ -90,9 +96,9 @@ class CleanWidget(QWidget):
         result_layout.addLayout(card_row)
 
         btn_row = QHBoxLayout()
-        self.btn_normal = QPushButton("打开正常表")
-        self.btn_abnormal = QPushButton("打开异常表")
-        self.btn_over = QPushButton("打开超12表")
+        self.btn_normal = QPushButton("下载正常表")
+        self.btn_abnormal = QPushButton("下载异常表")
+        self.btn_over = QPushButton("下载超12单独表")
         self.btn_normal.clicked.connect(lambda: self._open_result("normal_file_url"))
         self.btn_abnormal.clicked.connect(lambda: self._open_result("abnormal_file_url"))
         self.btn_over.clicked.connect(lambda: self._open_result("over_limit_file_url"))
@@ -109,9 +115,9 @@ class CleanWidget(QWidget):
         init_table(self.normal_table)
         init_table(self.abnormal_table)
         init_table(self.over_table)
-        self.tabs.addTab(self.normal_table, "正常")
-        self.tabs.addTab(self.abnormal_table, "异常")
-        self.tabs.addTab(self.over_table, "超12其余正常")
+        self.tabs.addTab(self.normal_table, "正常预览")
+        self.tabs.addTab(self.abnormal_table, "异常预览")
+        self.tabs.addTab(self.over_table, "超12其余正常预览")
         result_layout.addWidget(self.tabs)
         layout.addWidget(result_box)
 
@@ -227,10 +233,19 @@ class CleanWidget(QWidget):
                 "over_limit_rows": len(df_over_limit),
             }
 
-            self.card_total.set_value(len(df_raw))
-            self.card_normal.set_value(len(df_normal))
-            self.card_abnormal.set_value(len(df_abnormal))
-            self.card_over.set_value(len(df_over_limit))
+            total_rows = len(df_raw)
+            normal_rows = len(df_normal)
+            abnormal_rows = len(df_abnormal)
+            over_rows = len(df_over_limit)
+
+            self.card_total.set_value(total_rows)
+            self.card_total.set_meta("上传行数")
+            self.card_normal.set_value(normal_rows)
+            self.card_normal.set_meta(self._ratio_text(normal_rows, total_rows))
+            self.card_abnormal.set_value(abnormal_rows)
+            self.card_abnormal.set_meta(self._ratio_text(abnormal_rows, total_rows))
+            self.card_over.set_value(over_rows)
+            self.card_over.set_meta(self._ratio_text(over_rows, total_rows))
             set_dataframe(self.normal_table, df_normal)
             set_dataframe(self.abnormal_table, df_abnormal)
             set_dataframe(self.over_table, df_over_limit)

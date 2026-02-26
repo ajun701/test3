@@ -184,7 +184,7 @@ class MainWindow(QMainWindow):
             QFrame#stat-card-primary, QFrame#stat-card-success, QFrame#stat-card-warning, QFrame#stat-card-info {
                 border-radius: 10px;
                 border: 1px solid #d6e3f7;
-                background: #f8fbff;
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #f9fcff, stop:1 #f3f8ff);
             }
             QFrame#stat-card-primary {
                 border-left: 4px solid #287dff;
@@ -207,6 +207,11 @@ class MainWindow(QMainWindow):
                 color: #173d75;
                 font-size: 22px;
                 font-weight: 700;
+            }
+            QLabel#stat-meta {
+                color: #6b87ae;
+                font-size: 11px;
+                font-weight: 500;
             }
             QLabel#statusBadge {
                 border-radius: 10px;
@@ -240,6 +245,33 @@ class MainWindow(QMainWindow):
                 border-color: #f09da1;
                 color: #b13a42;
                 background: #fff0f1;
+            }
+            QTextEdit#runtimeLog {
+                font-family: "Consolas", "Courier New", monospace;
+                font-size: 12px;
+                background: #f7fbff;
+                border: 1px solid #c5d8f3;
+                border-radius: 8px;
+            }
+            QLabel#filterSummary {
+                border: 1px solid #cfe0f8;
+                border-radius: 8px;
+                background: #f3f8ff;
+                color: #2f588f;
+                padding: 5px 8px;
+                font-size: 12px;
+                font-weight: 600;
+            }
+            QLabel#subtleHint {
+                color: #6a86ac;
+                font-size: 12px;
+            }
+            QLabel#errorInline {
+                color: #b13a42;
+                background: #fff3f4;
+                border: 1px solid #f0c7cb;
+                border-radius: 8px;
+                padding: 4px 8px;
             }
             """
         )

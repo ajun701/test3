@@ -80,10 +80,10 @@ def call_qwen_vl_multi_with_retry(
     api_key: str,
 ) -> Dict[str, Any]:
     if dashscope is None:
-        return {"paid_amount": None, "is_match": None, "reason": "未安装 dashscope 依赖"}
+        return {"paid_amount": None, "is_match": None, "reason": "未安装 dashscope 依赖", "attempts": 0}
 
     if not api_key.strip():
-        return {"paid_amount": None, "is_match": None, "reason": "缺少 DashScope API Key"}
+        return {"paid_amount": None, "is_match": None, "reason": "缺少 DashScope API Key", "attempts": 0}
 
     dashscope.api_key = api_key.strip()
 
@@ -104,13 +104,15 @@ def call_qwen_vl_multi_with_retry(
                     time.sleep(backoff_base_sec * (2 ** attempt))
                     attempt += 1
                     continue
-                return {"paid_amount": None, "is_match": None, "reason": reason}
+                return {"paid_amount": None, "is_match": None, "reason": reason, "attempts": attempt + 1}
 
             raw_text = resp.output.choices[0]["message"]["content"][0]["text"]
-            return _parse_vl_json(raw_text, expected_amount)
+            parsed = _parse_vl_json(raw_text, expected_amount)
+            parsed["attempts"] = attempt + 1
+            return parsed
         except Exception as exc:
             if attempt < max_retries:
                 time.sleep(backoff_base_sec * (2 ** attempt))
                 attempt += 1
                 continue
-            return {"paid_amount": None, "is_match": None, "reason": f"异常: {exc}"}
+            return {"paid_amount": None, "is_match": None, "reason": f"异常: {exc}", "attempts": attempt + 1}

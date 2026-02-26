@@ -92,11 +92,16 @@ def set_dataframe(table: QTableWidget, df: pd.DataFrame, limit: int = 300) -> No
 
 
 
-def set_records_table(table: QTableWidget, columns: list[str], rows: list[dict[str, Any]]) -> None:
+def set_records_table(
+    table: QTableWidget,
+    columns: list[str],
+    rows: list[dict[str, Any]],
+    headers: list[str] | None = None,
+) -> None:
     table.clear()
     table.setRowCount(len(rows))
     table.setColumnCount(len(columns))
-    table.setHorizontalHeaderLabels(columns)
+    table.setHorizontalHeaderLabels(headers or columns)
 
     for row_idx, record in enumerate(rows):
         for col_idx, col in enumerate(columns):
@@ -126,24 +131,33 @@ def read_file_bytes(path: str) -> tuple[bytes, str]:
 
 
 class StatCard(QFrame):
-    def __init__(self, title: str, value: str = "0", accent: str = "primary") -> None:
+    def __init__(self, title: str, value: str = "0", accent: str = "primary", meta: str = "") -> None:
         super().__init__()
         self.setObjectName(f"stat-card-{accent}")
         self.setFrameShape(QFrame.StyledPanel)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self.setMinimumHeight(74)
+        self.setMinimumHeight(88)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(12, 10, 12, 10)
-        layout.setSpacing(4)
+        layout.setSpacing(3)
 
         self.title_label = QLabel(str(title))
         self.title_label.setObjectName("stat-title")
         self.value_label = QLabel(str(value))
         self.value_label.setObjectName("stat-value")
+        self.meta_label = QLabel(str(meta))
+        self.meta_label.setObjectName("stat-meta")
+        self.meta_label.setVisible(bool(str(meta).strip()))
 
         layout.addWidget(self.title_label)
         layout.addWidget(self.value_label)
+        layout.addWidget(self.meta_label)
 
     def set_value(self, value: Any) -> None:
         self.value_label.setText(str(value))
+
+    def set_meta(self, meta: Any) -> None:
+        text = str(meta or "").strip()
+        self.meta_label.setText(text)
+        self.meta_label.setVisible(bool(text))

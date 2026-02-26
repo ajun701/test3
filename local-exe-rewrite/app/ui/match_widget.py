@@ -51,6 +51,12 @@ class MatchWidget(QWidget):
         finally:
             db.close()
 
+    @staticmethod
+    def _ratio_text(part: int, total: int) -> str:
+        if total <= 0:
+            return "占比 0.0%"
+        return f"占比 {part * 100.0 / total:.1f}%"
+
     def _build_ui(self) -> None:
         layout = QVBoxLayout(self)
 
@@ -95,17 +101,17 @@ class MatchWidget(QWidget):
         result_box = QGroupBox("匹配结果")
         result_layout = QVBoxLayout(result_box)
         card_row = QHBoxLayout()
-        self.card_total = StatCard("总行", "0", accent="primary")
-        self.card_inbound = StatCard("已入库", "0", accent="success")
-        self.card_pending = StatCard("未入库", "0", accent="warning")
+        self.card_total = StatCard("总行", "0", accent="primary", meta="匹配基数")
+        self.card_inbound = StatCard("已入库", "0", accent="success", meta="占比 0.0%")
+        self.card_pending = StatCard("未入库", "0", accent="warning", meta="占比 0.0%")
         card_row.addWidget(self.card_total)
         card_row.addWidget(self.card_inbound)
         card_row.addWidget(self.card_pending)
         result_layout.addLayout(card_row)
 
         btn_row = QHBoxLayout()
-        self.btn_inbound = QPushButton("打开已入库结果")
-        self.btn_pending = QPushButton("打开未入库结果")
+        self.btn_inbound = QPushButton("下载已入库")
+        self.btn_pending = QPushButton("下载未入库")
         self.btn_inbound.clicked.connect(lambda: self._open_result("inbound_file_url"))
         self.btn_pending.clicked.connect(lambda: self._open_result("pending_file_url"))
         btn_row.addWidget(self.btn_inbound)
@@ -118,8 +124,8 @@ class MatchWidget(QWidget):
         self.pending_res_table = QTableWidget()
         init_table(self.inbound_res_table)
         init_table(self.pending_res_table)
-        self.res_tabs.addTab(self.inbound_res_table, "已入库")
-        self.res_tabs.addTab(self.pending_res_table, "未入库")
+        self.res_tabs.addTab(self.inbound_res_table, "已入库预览")
+        self.res_tabs.addTab(self.pending_res_table, "未入库预览")
         result_layout.addWidget(self.res_tabs)
 
         layout.addWidget(result_box)
@@ -257,9 +263,15 @@ class MatchWidget(QWidget):
                 "pending_rows": len(df_pending),
                 "total_rows": len(df_source),
             }
-            self.card_total.set_value(len(df_source))
-            self.card_inbound.set_value(len(df_inbound))
-            self.card_pending.set_value(len(df_pending))
+            total_rows = len(df_source)
+            inbound_rows = len(df_inbound)
+            pending_rows = len(df_pending)
+            self.card_total.set_value(total_rows)
+            self.card_total.set_meta("匹配基数")
+            self.card_inbound.set_value(inbound_rows)
+            self.card_inbound.set_meta(self._ratio_text(inbound_rows, total_rows))
+            self.card_pending.set_value(pending_rows)
+            self.card_pending.set_meta(self._ratio_text(pending_rows, total_rows))
             set_dataframe(self.inbound_res_table, df_inbound)
             set_dataframe(self.pending_res_table, df_pending)
             self._on_match_done(self.result)

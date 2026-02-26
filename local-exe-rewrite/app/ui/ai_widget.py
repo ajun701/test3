@@ -58,6 +58,7 @@ class AIWidget(QWidget):
 
         self.task_id = ""
         self.rows_page = 1
+        self._last_log_text = ""
 
         self.timer = QTimer(self)
         self.timer.setInterval(1500)
@@ -84,6 +85,23 @@ class AIWidget(QWidget):
             return value.strftime("%Y-%m-%d %H:%M:%S")
         except Exception:
             return str(value)
+
+    @staticmethod
+    def _ratio_text(part: int, total: int, prefix: str = "占比") -> str:
+        if total <= 0:
+            return f"{prefix} 0.0%"
+        return f"{prefix} {part * 100.0 / total:.1f}%"
+
+    @staticmethod
+    def _fmt_duration(seconds: float) -> str:
+        total = max(int(round(float(seconds))), 0)
+        hours, rem = divmod(total, 3600)
+        minutes, sec = divmod(rem, 60)
+        if hours > 0:
+            return f"{hours}小时{minutes}分{sec}秒"
+        if minutes > 0:
+            return f"{minutes}分{sec}秒"
+        return f"{sec}秒"
 
     @contextmanager
     def _db(self):
@@ -174,10 +192,10 @@ class AIWidget(QWidget):
         status_box = QGroupBox("任务状态")
         status_layout = QVBoxLayout(status_box)
         card_row = QHBoxLayout()
-        self.card_total = StatCard("计划", "0", accent="primary")
-        self.card_processed = StatCard("已处理", "0", accent="info")
-        self.card_ok = StatCard("正常", "0", accent="success")
-        self.card_bad = StatCard("异常", "0", accent="warning")
+        self.card_total = StatCard("计划", "0", accent="primary", meta="计划处理行数")
+        self.card_processed = StatCard("已处理", "0", accent="info", meta="完成率 0.0%")
+        self.card_ok = StatCard("正常", "0", accent="success", meta="占已处理 0.0%")
+        self.card_bad = StatCard("异常", "0", accent="warning", meta="占已处理 0.0%")
         card_row.addWidget(self.card_total)
         card_row.addWidget(self.card_processed)
         card_row.addWidget(self.card_ok)
@@ -197,10 +215,12 @@ class AIWidget(QWidget):
         self.progress = QProgressBar()
         self.progress.setRange(0, 100)
         self.progress.setTextVisible(True)
-        self.progress.setFormat("进度 %p%")
-        self.progress_desc = QLabel("已处理 0 / 0，待处理 0")
+        self.progress.setFormat("总进度 %p%%")
+        self.progress_desc = QLabel("已处理 0 / 0（0.0%），待处理 0")
+        self.status_detail_label = QLabel("状态：-")
         self.runtime_speed_label = QLabel("当前速度：-")
         self.error_label = QLabel("")
+        self.error_label.setObjectName("errorInline")
         self.align_text = QTextEdit()
         self.align_text.setReadOnly(True)
         self.artifact_list = QListWidget()
@@ -208,6 +228,7 @@ class AIWidget(QWidget):
         status_layout.addLayout(top_row)
         status_layout.addWidget(self.progress)
         status_layout.addWidget(self.progress_desc)
+        status_layout.addWidget(self.status_detail_label)
         status_layout.addWidget(self.runtime_speed_label)
         status_layout.addWidget(self.error_label)
         status_layout.addWidget(QLabel("一致性报告"))
@@ -256,6 +277,31 @@ class AIWidget(QWidget):
         snap_layout = QVBoxLayout(snap_box)
         snap_layout.addWidget(self.snapshot_list)
         layout.addWidget(snap_box)
+
+        log_box = QGroupBox("实时处理日志")
+        log_layout = QVBoxLayout(log_box)
+        log_ctrl = QHBoxLayout()
+        self.log_lines = QComboBox()
+        self.log_lines.addItem("最近100行", 100)
+        self.log_lines.addItem("最近300行", 300)
+        self.log_lines.addItem("最近800行", 800)
+        self.log_lines.setCurrentIndex(1)
+        self.log_lines.currentIndexChanged.connect(self._refresh_runtime_logs)
+        self.log_auto_scroll = QCheckBox("自动滚动")
+        self.log_auto_scroll.setChecked(True)
+        btn_open_log = QPushButton("打开日志文件")
+        btn_open_log.clicked.connect(self._open_runtime_log_file)
+        log_ctrl.addWidget(self.log_lines)
+        log_ctrl.addWidget(self.log_auto_scroll)
+        log_ctrl.addWidget(btn_open_log)
+        log_ctrl.addStretch(1)
+        log_layout.addLayout(log_ctrl)
+        self.log_view = QTextEdit()
+        self.log_view.setObjectName("runtimeLog")
+        self.log_view.setReadOnly(True)
+        self.log_view.setPlaceholderText("任务运行后，这里会显示逐行处理日志。")
+        log_layout.addWidget(self.log_view)
+        layout.addWidget(log_box)
 
     def _select_file(self) -> None:
         path, _ = QFileDialog.getOpenFileName(self, "选择待复核文件", "", "表格文件 (*.xlsx *.xls *.csv)")
@@ -406,6 +452,7 @@ class AIWidget(QWidget):
     def refresh_panels(self) -> None:
         self._refresh_status()
         self._refresh_rows()
+        self._refresh_runtime_logs()
 
     def _refresh_status(self) -> None:
         user = self._get_current_user()
@@ -420,6 +467,7 @@ class AIWidget(QWidget):
         pending = int(status.get("pending") or max(total - processed, 0))
         ok_rows = int(status.get("ok_rows") or 0)
         bad_rows = int(status.get("bad_rows") or 0)
+        progress_pct = processed * 100.0 / total if total > 0 else 0.0
         status_cn = self._status_cn(str(status.get("status") or ""))
         status_raw = str(status.get("status") or "").strip().lower()
 
@@ -432,17 +480,28 @@ class AIWidget(QWidget):
         self.status_badge.style().polish(self.status_badge)
         self.updated_label.setText(f"更新时间：{self._fmt_dt(status.get('updated_at'))}")
         self.card_total.set_value(total)
+        self.card_total.set_meta("计划处理行数")
         self.card_processed.set_value(processed)
+        self.card_processed.set_meta(self._ratio_text(processed, total, prefix="完成率"))
         self.card_ok.set_value(ok_rows)
+        self.card_ok.set_meta(self._ratio_text(ok_rows, processed, prefix="占已处理"))
         self.card_bad.set_value(bad_rows)
+        self.card_bad.set_meta(self._ratio_text(bad_rows, processed, prefix="占已处理"))
         self.progress.setValue(int(round(float(status.get("progress_ratio", 0.0)) * 100)))
-        self.progress_desc.setText(f"已处理 {processed} / {total}，待处理 {pending}")
+        self.progress_desc.setText(f"已处理 {processed} / {total}（{progress_pct:.1f}%），待处理 {pending}")
+        self.status_detail_label.setText(f"状态：{status_cn}（{status.get('status')}）")
         interval = status.get("min_interval_sec")
         if interval is None:
             self.runtime_speed_label.setText("当前速度：-")
         else:
-            self.runtime_speed_label.setText(f"当前速度：{float(interval):.3f} 秒/条")
-        self.error_label.setText(status.get("error_message") or "")
+            interval_val = float(interval)
+            self.runtime_speed_label.setText(f"当前速度：{interval_val:.3f} 秒/条")
+            if pending > 0:
+                self.progress_desc.setText(
+                    f"已处理 {processed} / {total}（{progress_pct:.1f}%），待处理 {pending}，预计剩余 {self._fmt_duration(pending * interval_val)}"
+                )
+        err = str(status.get("error_message") or "").strip()
+        self.error_label.setText(f"异常：{err}" if err else "")
         self.align_text.setPlainText(json.dumps(status.get("alignment_report") or {}, ensure_ascii=False, indent=2))
 
         self.artifact_list.clear()
@@ -497,6 +556,33 @@ class AIWidget(QWidget):
         except Exception as exc:
             show_error(self, f"无法打开文件: {exc}")
 
+    def _refresh_runtime_logs(self, *_args) -> None:
+        user = self._get_current_user()
+        if user is None or not self.task_id:
+            self.log_view.clear()
+            self._last_log_text = ""
+            return
+
+        lines = self._task_runner.get_runtime_logs(self.task_id, max_lines=int(self.log_lines.currentData() or 300))
+        text = "\n".join(lines)
+        if text == self._last_log_text:
+            return
+        self._last_log_text = text
+        self.log_view.setPlainText(text)
+        if self.log_auto_scroll.isChecked():
+            sb = self.log_view.verticalScrollBar()
+            sb.setValue(sb.maximum())
+
+    def _open_runtime_log_file(self) -> None:
+        if not self.task_id:
+            show_warn(self, "暂无任务日志")
+            return
+        path = self._task_runner.get_runtime_log_path(self.task_id)
+        try:
+            open_path(path)
+        except Exception as exc:
+            show_error(self, f"无法打开日志文件: {exc}")
+
     def _poll(self) -> None:
         try:
             self.refresh_panels()
@@ -507,6 +593,7 @@ class AIWidget(QWidget):
     def restore_latest_task(self, task_id: str) -> None:
         self.task_id = str(task_id or "").strip()
         self.rows_page = 1
+        self._last_log_text = ""
         if self.task_id:
             self.refresh_panels()
 

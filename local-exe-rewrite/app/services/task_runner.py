@@ -91,6 +91,40 @@ class AITaskRunner:
         self._threads: dict[str, threading.Thread] = {}
         self._lock = threading.Lock()
 
+    def _log_path(self, task_id: str) -> Path:
+        return settings.task_dir / f"{str(task_id or '').strip()}.log"
+
+    def _reset_runtime_log(self, task_id: str) -> None:
+        try:
+            self._log_path(task_id).write_text("", encoding="utf-8")
+        except Exception:
+            pass
+
+    def _append_runtime_log(self, task_id: str, message: str) -> None:
+        ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        line = f"[{ts}] {str(message or '').strip()}".rstrip() + "\n"
+        try:
+            path = self._log_path(task_id)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with path.open("a", encoding="utf-8") as fh:
+                fh.write(line)
+        except Exception:
+            pass
+
+    def get_runtime_log_path(self, task_id: str) -> str:
+        return str(self._log_path(task_id))
+
+    def get_runtime_logs(self, task_id: str, max_lines: int = 300) -> list[str]:
+        path = self._log_path(task_id)
+        if not path.exists() or not path.is_file():
+            return []
+        try:
+            lines = path.read_text(encoding="utf-8", errors="ignore").splitlines()
+            n = max(int(max_lines or 0), 1)
+            return lines[-n:]
+        except Exception:
+            return []
+
     def _calc_alignment_report(self, task: AITask, df_work: pd.DataFrame) -> Dict[str, Any]:
         try:
             src_df = pd.read_pickle(task.source_df_path)
@@ -198,6 +232,11 @@ class AITaskRunner:
         )
         db.commit()
         db.refresh(task)
+        self._reset_runtime_log(task_id)
+        self._append_runtime_log(
+            task_id,
+            f"任务创建成功，模型={model_name}，计划处理 {total_rows} 行，最小间隔 {min_interval_sec:.3f} 秒/条",
+        )
 
         self._start_thread(task_id, effective_api_key)
         return task
@@ -206,6 +245,7 @@ class AITaskRunner:
         with self._lock:
             old = self._threads.get(task_id)
             if old and old.is_alive():
+                self._append_runtime_log(task_id, "检测到任务线程已在运行，跳过重复启动。")
                 return
             t = threading.Thread(target=self._run_task, args=(task_id, api_key), daemon=True)
             self._threads[task_id] = t
@@ -217,13 +257,16 @@ class AITaskRunner:
         try:
             task = db.query(AITask).filter(AITask.task_id == task_id).first()
             if not task or task.status != "running":
+                self._append_runtime_log(task_id, "任务不存在或状态非 running，线程退出。")
                 return
+            self._append_runtime_log(task_id, "任务线程启动，开始执行。")
 
             effective_api_key = self._effective_api_key(api_key)
             if not effective_api_key:
                 task.status = "error"
                 task.error_message = "缺少 DashScope API Key，无法执行 AI 任务"
                 task.finished_at = datetime.utcnow()
+                self._append_runtime_log(task_id, "缺少 DashScope API Key，任务失败。")
                 db.add(
                     OperationHistory(
                         stage="步骤三AI复核",
@@ -241,6 +284,7 @@ class AITaskRunner:
             if task.total > len(df_work):
                 task.total = len(df_work)
                 db.commit()
+                self._append_runtime_log(task_id, f"任务总行数修正为 {task.total}。")
 
             last_call_ts = 0.0
 
@@ -248,10 +292,13 @@ class AITaskRunner:
                 db.refresh(task)
                 if task.status != "running":
                     df_work.to_pickle(task.df_work_path)
+                    self._append_runtime_log(task_id, f"任务状态变更为 {task.status}，线程安全退出。")
                     return
 
                 idx = task.next_idx
                 row = df_work.iloc[idx]
+                human_idx = idx + 1
+                self._append_runtime_log(task_id, f"[{human_idx}/{task.total}] 开始处理。")
 
                 now_m = time.monotonic()
                 wait = max(0.0, task.min_interval_sec - (now_m - last_call_ts))
@@ -268,9 +315,9 @@ class AITaskRunner:
                     img_urls = [u for u in expanded if u.lower().endswith(IMAGE_EXTENSIONS)][: task.max_images]
 
                 if expected is None:
-                    res = {"paid_amount": None, "is_match": False, "reason": "金额字段无法解析为数字"}
+                    res = {"paid_amount": None, "is_match": False, "reason": "金额字段无法解析为数字", "attempts": 0}
                 elif not img_urls:
-                    res = {"paid_amount": None, "is_match": None, "reason": "未找到可用图片URL"}
+                    res = {"paid_amount": None, "is_match": None, "reason": "未找到可用图片URL", "attempts": 0}
                 else:
                     res = call_qwen_vl_multi_with_retry(
                         img_urls,
@@ -284,17 +331,27 @@ class AITaskRunner:
                 df_work.at[idx, COL_AI_EXTRACTED_AMOUNT] = res.get("paid_amount")
                 df_work.at[idx, COL_AI_MATCH] = bool(res.get("is_match") is True)
                 df_work.at[idx, COL_AI_NOTE] = "" if res.get("is_match") else (res.get("reason") or "AI判定异常")
+                attempts = int(res.get("attempts") or 0)
+                paid_amount = res.get("paid_amount")
+                reason = str(res.get("reason") or "").strip()
+                is_match = res.get("is_match")
+                self._append_runtime_log(
+                    task_id,
+                    f"[{human_idx}/{task.total}] 完成，attempts={attempts}，paid={paid_amount}，is_match={is_match}，reason={reason}",
+                )
 
                 task.next_idx += 1
                 task.updated_at = datetime.utcnow()
 
                 if task.next_idx % 10 == 0 or task.next_idx >= task.total:
                     df_work.to_pickle(task.df_work_path)
+                    self._append_runtime_log(task_id, f"已持久化进度：{task.next_idx}/{task.total}。")
 
                 db.commit()
 
             task.status = "completed"
             task.finished_at = datetime.utcnow()
+            self._append_runtime_log(task_id, "任务处理结束，开始生成结果产物。")
 
             processed_mask = df_work[COL_AI_MATCH].notna()
             df_processed = df_work[processed_mask]
@@ -367,6 +424,7 @@ class AITaskRunner:
                 artifacts.append(url_pending)
 
             task.artifacts = artifacts
+            self._append_runtime_log(task_id, f"产物生成完成，共 {len(artifacts)} 个文件。")
             db.add(
                 OperationHistory(
                     stage="步骤三AI复核",
@@ -382,8 +440,10 @@ class AITaskRunner:
                 )
             )
             db.commit()
+            self._append_runtime_log(task_id, "任务已完成。")
         except Exception as exc:
             db.rollback()
+            self._append_runtime_log(task_id, f"任务执行异常：{exc}")
             if task is not None:
                 task.status = "error"
                 task.error_message = str(exc)
@@ -448,6 +508,7 @@ class AITaskRunner:
             "min_interval_sec": task.min_interval_sec,
             "error_message": task.error_message,
             "artifacts": task.artifacts if isinstance(task.artifacts, list) else [],
+            "runtime_log_path": self.get_runtime_log_path(task.task_id),
             "progress_ratio": progress_ratio,
             "alignment_report": alignment_report,
         }
@@ -513,6 +574,7 @@ class AITaskRunner:
 
         if task.status == "running":
             task.status = "paused"
+            self._append_runtime_log(task_id, f"用户 {current_user.username} 下发暂停指令。")
             db.add(
                 OperationHistory(
                     stage="步骤三AI复核",
@@ -553,6 +615,7 @@ class AITaskRunner:
                 task.min_interval_sec = float(min_interval_sec)
             task.status = "running"
             task.error_message = None
+            self._append_runtime_log(task_id, f"用户 {current_user.username} 恢复任务，最小间隔={task.min_interval_sec:.3f}s。")
             db.add(
                 OperationHistory(
                     stage="步骤三AI复核",
@@ -588,6 +651,12 @@ class AITaskRunner:
             df_work = pd.DataFrame()
 
         alignment_report = self._calc_alignment_report(task, df_work)
+        self._append_runtime_log(
+            task_id,
+            f"执行手动一致性校验：ok={bool(alignment_report.get('ok'))}，"
+            f"missing={int(alignment_report.get('missing_rows') or 0)}，"
+            f"extra={int(alignment_report.get('extra_rows') or 0)}。",
+        )
 
         db.add(
             OperationHistory(
@@ -711,6 +780,11 @@ class AITaskRunner:
             )
         )
         db.commit()
+        self._append_runtime_log(
+            task_id,
+            f"导出快照完成：processed={len(df_processed)}，unprocessed={len(df_unprocessed)}，"
+            f"ok={len(df_ok)}，bad={len(df_bad)}。",
+        )
 
         return {
             "task_id": task.task_id,
