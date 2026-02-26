@@ -297,7 +297,7 @@ class HistoryWidget(QWidget):
 
     def _load_history(self) -> None:
         if self._get_current_user() is None:
-            show_warn(self, "请先登录")
+            show_warn(self, "本地用户未就绪，请重启程序")
             return
 
         try:
@@ -344,7 +344,7 @@ class HistoryWidget(QWidget):
 
     def _load_artifacts(self) -> None:
         if self._get_current_user() is None:
-            show_warn(self, "请先登录")
+            show_warn(self, "本地用户未就绪，请重启程序")
             return
 
         try:
@@ -392,7 +392,7 @@ class HistoryWidget(QWidget):
 
     def export_csv(self) -> None:
         if self._get_current_user() is None:
-            show_warn(self, "请先登录")
+            show_warn(self, "本地用户未就绪，请重启程序")
             return
 
         try:
@@ -570,3 +570,4 @@ class HistoryWidget(QWidget):
         self.artifact_size = int(self.artifact_size_combo.currentData() or 50)
         self.artifact_page = 1
         self._load_artifacts()
+

@@ -17,7 +17,6 @@ def _runtime_root() -> Path:
 class AppSettings:
     project_name: str
     secret_key: str
-    register_secret: str
     dashscope_api_key: str
     database_url: str
     data_dir: Path
@@ -39,10 +38,6 @@ class AppSettings:
         settings = cls(
             project_name="退运费智能审核中台（本地版）",
             secret_key=os.getenv("SECRET_KEY", "replace-this-secret-in-production"),
-            register_secret=os.getenv(
-                "REGISTER_SECRET",
-                "16d8udP4JkJEdCUzZcQdd3Pa0P1ws6A52oPiWRPf6nUvKGL",
-            ),
             dashscope_api_key=os.getenv("DASHSCOPE_API_KEY", "").strip(),
             database_url=db_url,
             data_dir=data_dir,

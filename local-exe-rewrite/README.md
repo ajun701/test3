@@ -5,14 +5,15 @@
 - 不依赖 FastAPI / Redis / Celery / 浏览器
 - 单机本地运行（SQLite + 本地文件）
 - 后续可打包为 Windows `exe`
-- 保持原业务流程与功能模块：登录注册、步骤一清洗、步骤二入库匹配、步骤三AI复核（异步+暂停继续+快照+一致性校验+行级进度）、步骤四历史记录与文件追溯
+- 保持原业务流程与功能模块：步骤一清洗、步骤二入库匹配、步骤三AI复核（异步+暂停继续+快照+一致性校验+行级进度）、步骤四历史记录与文件追溯
+- 默认本地离线用户自动登录（无需登录/注册）
 
 ## 目录结构
 
 - `app/main.py`: 应用入口
 - `app/core`: 配置、常量、密码安全
 - `app/db`: SQLAlchemy 模型与本地 SQLite 会话
-- `app/services`: 清洗/匹配/AI任务/历史/产物/鉴权
+- `app/services`: 清洗/匹配/AI任务/历史/产物
 - `app/ui`: PySide6 桌面 UI
 - `run_local.bat`: 本地开发运行脚本
 - `build_exe.bat`: PyInstaller 打包脚本
@@ -41,7 +42,6 @@
 
 - `DASHSCOPE_API_KEY`: AI复核默认 API Key
 - `DATABASE_URL`: 本地数据库连接（默认 sqlite）
-- `REGISTER_SECRET`: 注册密钥
 
 默认数据目录：
 

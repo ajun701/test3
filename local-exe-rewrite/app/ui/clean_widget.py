@@ -136,7 +136,7 @@ class CleanWidget(QWidget):
     def _run_clean(self) -> None:
         user = self._get_current_user()
         if user is None:
-            show_warn(self, "请先登录")
+            show_warn(self, "本地用户未就绪，请重启程序")
             return
 
         path = self.file_edit.text().strip()
@@ -263,3 +263,4 @@ class CleanWidget(QWidget):
             open_path(path)
         except Exception as exc:
             show_error(self, f"无法打开文件: {exc}")
+

@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
     QListWidgetItem,
     QPushButton,
     QProgressBar,
+    QScrollArea,
     QSpinBox,
     QDoubleSpinBox,
     QTableWidget,
@@ -112,7 +113,19 @@ class AIWidget(QWidget):
             db.close()
 
     def _build_ui(self) -> None:
-        layout = QVBoxLayout(self)
+        root_layout = QVBoxLayout(self)
+        root_layout.setContentsMargins(8, 8, 8, 8)
+        root_layout.setSpacing(8)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        root_layout.addWidget(scroll)
+
+        container = QWidget()
+        layout = QVBoxLayout(container)
+        layout.setContentsMargins(4, 4, 4, 4)
+        layout.setSpacing(10)
+        scroll.setWidget(container)
 
         form_box = QGroupBox("步骤三：AI复核")
         form = QGridLayout(form_box)
@@ -186,8 +199,9 @@ class AIWidget(QWidget):
         init_table(self.source_table)
         src_box = QGroupBox("待复核预览")
         src_layout = QVBoxLayout(src_box)
+        src_box.setMinimumHeight(210)
         src_layout.addWidget(self.source_table)
-        layout.addWidget(src_box)
+        layout.addWidget(src_box, 1)
 
         status_box = QGroupBox("任务状态")
         status_layout = QVBoxLayout(status_box)
@@ -235,7 +249,9 @@ class AIWidget(QWidget):
         status_layout.addWidget(self.align_text)
         status_layout.addWidget(QLabel("任务产物（双击打开）"))
         status_layout.addWidget(self.artifact_list)
-        layout.addWidget(status_box)
+        self.align_text.setMinimumHeight(140)
+        self.artifact_list.setMinimumHeight(90)
+        layout.addWidget(status_box, 1)
 
         rows_box = QGroupBox("行级进度")
         rows_layout = QVBoxLayout(rows_box)
@@ -268,15 +284,17 @@ class AIWidget(QWidget):
 
         self.rows_table = QTableWidget()
         init_table(self.rows_table)
+        rows_box.setMinimumHeight(280)
         rows_layout.addWidget(self.rows_table)
-        layout.addWidget(rows_box)
+        layout.addWidget(rows_box, 2)
 
         self.snapshot_list = QListWidget()
         self.snapshot_list.itemDoubleClicked.connect(self._open_item)
         snap_box = QGroupBox("快照产物")
         snap_layout = QVBoxLayout(snap_box)
+        snap_box.setMinimumHeight(120)
         snap_layout.addWidget(self.snapshot_list)
-        layout.addWidget(snap_box)
+        layout.addWidget(snap_box, 0)
 
         log_box = QGroupBox("实时处理日志")
         log_layout = QVBoxLayout(log_box)
@@ -300,8 +318,11 @@ class AIWidget(QWidget):
         self.log_view.setObjectName("runtimeLog")
         self.log_view.setReadOnly(True)
         self.log_view.setPlaceholderText("任务运行后，这里会显示逐行处理日志。")
+        self.log_view.setMinimumHeight(200)
         log_layout.addWidget(self.log_view)
-        layout.addWidget(log_box)
+        layout.addWidget(log_box, 1)
+
+        layout.addStretch(1)
 
     def _select_file(self) -> None:
         path, _ = QFileDialog.getOpenFileName(self, "选择待复核文件", "", "表格文件 (*.xlsx *.xls *.csv)")
@@ -345,7 +366,7 @@ class AIWidget(QWidget):
     def _start_task(self) -> None:
         user = self._get_current_user()
         if user is None:
-            show_warn(self, "请先登录")
+            show_warn(self, "本地用户未就绪，请重启程序")
             return
 
         try:
@@ -599,3 +620,4 @@ class AIWidget(QWidget):
 
     def stop_polling(self) -> None:
         self.timer.stop()
+

@@ -1,25 +1,27 @@
 ﻿from __future__ import annotations
 
+from datetime import datetime
 from pathlib import Path
 
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QMainWindow,
     QPushButton,
-    QStackedWidget,
     QTabWidget,
     QVBoxLayout,
     QWidget,
 )
 
 from app.core.config import settings
-from app.db.session import SessionLocal
+from app.core.security import hash_password
+from app.db.models import User
+from app.db.session import SessionLocal, init_db
 from app.services.task_runner import AITaskRunner
 from app.ui.ai_widget import AIWidget
-from app.ui.auth_widget import AuthWidget
 from app.ui.clean_widget import CleanWidget
-from app.ui.helpers import open_path, show_error, show_info
+from app.ui.helpers import open_path, show_error
 from app.ui.history_widget import HistoryWidget
 from app.ui.match_widget import MatchWidget
 
@@ -29,8 +31,10 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle(settings.project_name)
         self.resize(1500, 980)
+        self.setMinimumSize(1080, 720)
+        self.setWindowFlag(Qt.WindowMinMaxButtonsHint, True)
 
-        self.current_user = None
+        self.current_user: User | None = None
         self.clean_result: dict = {}
         self.match_result: dict = {}
 
@@ -38,34 +42,25 @@ class MainWindow(QMainWindow):
 
         self._build_ui()
         self._apply_theme()
+        self._init_local_mode()
 
     def _build_ui(self) -> None:
         root = QWidget()
         self.setCentralWidget(root)
-        layout = QVBoxLayout(root)
+        main_layout = QVBoxLayout(root)
 
-        self.stack = QStackedWidget()
-        layout.addWidget(self.stack)
-
-        self.auth_widget = AuthWidget(SessionLocal, self._on_auth_success)
-        self.stack.addWidget(self.auth_widget)
-
-        self.main_widget = QWidget()
-        self.stack.addWidget(self.main_widget)
-        self.stack.setCurrentWidget(self.auth_widget)
-
-        main_layout = QVBoxLayout(self.main_widget)
         top = QHBoxLayout()
         self.user_label = QLabel("当前用户：-")
+        self.mode_badge = QLabel("本地离线模式")
+        self.mode_badge.setObjectName("statusBadge")
+        self.mode_badge.setProperty("state", "completed")
         top.addWidget(self.user_label)
+        top.addWidget(self.mode_badge)
         top.addStretch(1)
 
         btn_data_dir = QPushButton("打开数据目录")
         btn_data_dir.clicked.connect(self._open_data_dir)
-        btn_logout = QPushButton("退出登录")
-        btn_logout.clicked.connect(self._logout)
         top.addWidget(btn_data_dir)
-        top.addWidget(btn_logout)
         main_layout.addLayout(top)
 
         self.tabs = QTabWidget()
@@ -276,6 +271,43 @@ class MainWindow(QMainWindow):
             """
         )
 
+    def _init_local_mode(self) -> None:
+        try:
+            init_db()
+            self.current_user = self._ensure_local_user()
+            self.user_label.setText(f"当前用户：{self.current_user.username}")
+            self.history_widget.query_all()
+            self._restore_latest_task()
+        except Exception as exc:
+            show_error(self, f"本地用户初始化失败: {exc}")
+
+    @staticmethod
+    def _ensure_local_user() -> User:
+        db = SessionLocal()
+        try:
+            username = "local_user"
+            user = db.query(User).filter(User.username == username).first()
+            if user is None:
+                user = User(
+                    username=username,
+                    password_hash=hash_password("local-offline-user"),
+                    is_active=True,
+                    created_at=datetime.utcnow(),
+                    last_login_at=datetime.utcnow(),
+                )
+                db.add(user)
+                db.commit()
+                db.refresh(user)
+                return user
+
+            user.is_active = True
+            user.last_login_at = datetime.utcnow()
+            db.commit()
+            db.refresh(user)
+            return user
+        finally:
+            db.close()
+
     def _get_current_user(self):
         return self.current_user
 
@@ -284,13 +316,6 @@ class MainWindow(QMainWindow):
 
     def _get_match_result(self):
         return self.match_result
-
-    def _on_auth_success(self, user) -> None:
-        self.current_user = user
-        self.user_label.setText(f"当前用户：{user.username}")
-        self.stack.setCurrentWidget(self.main_widget)
-        self.history_widget.query_all()
-        self._restore_latest_task()
 
     def _on_clean_done(self, result: dict) -> None:
         self.clean_result = result
@@ -327,13 +352,3 @@ class MainWindow(QMainWindow):
             open_path(str(Path(settings.data_dir)))
         except Exception as exc:
             show_error(self, f"无法打开数据目录: {exc}")
-
-    def _logout(self) -> None:
-        self.current_user = None
-        self.clean_result = {}
-        self.match_result = {}
-        self.ai_widget.restore_latest_task("")
-        self.ai_widget.stop_polling()
-        self.user_label.setText("当前用户：-")
-        self.stack.setCurrentWidget(self.auth_widget)
-        show_info(self, "已退出登录")
