@@ -1,0 +1,21 @@
+# 核心 Web 框架
+fastapi>=0.100.0
+uvicorn[standard]>=0.23.0
+python-multipart>=0.0.6
+
+# 异步任务队列与缓存
+celery>=5.3.0
+redis>=5.0.0
+
+# 数据库 ORM (当前默认使用 SQLite，未来可无缝切换 psycopg2/pymysql)
+SQLAlchemy>=2.0.0
+
+# 核心数据处理 (兼容你的老代码)
+pandas>=2.0.0
+openpyxl>=3.1.0
+
+# 环境变量与配置验证
+pydantic-settings>=2.0.0
+
+# 阿里云百炼大模型 SDK (Qwen-VL 多图推理)
+dashscope>=1.17.0
